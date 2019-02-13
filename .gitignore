@@ -2,6 +2,8 @@
 #####################
 *env/
 .vscode/
+.ipynb_checkpoints/
+notebooks/
 
 # Compiled source #
 ###################
