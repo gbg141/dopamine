@@ -145,14 +145,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     Returns:
       int, the selected action.
     """
-    self._reset_state()
-    self._record_observation(observation)
-
-    if not self.eval_mode:
-      self._train_step()
-
-    self.action = self._select_action()
-    return self.action
+    action = super(CovariateShiftAgent, self).begin_episode(observation)
+    self.is_beginning = True
+    return action
 
   def step(self, reward, observation):
     """Records the most recent transition and returns the agent's next action.
@@ -171,11 +166,31 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self._record_observation(observation)
 
     if not self.eval_mode:
-      self._store_transition(self._last_observation, self.action, reward, False)
+      self._store_transition(self._last_observation, self.action, reward, False, self.is_beginning)
       self._train_step()
 
     self.action = self._select_action()
+    self.is_beginning = False
     return self.action
+
+  def _store_transition(self, last_observation, action, reward, is_terminal, is_beginning=False):
+    """Stores an experienced transition.
+
+    Executes a tf session and executes replay buffer ops in order to store the
+    following tuple in the replay buffer:
+      (last_observation, action, reward, is_terminal).
+
+    Pedantically speaking, this does not actually store an entire transition
+    since the next state is recorded on the following time step.
+
+    Args:
+      last_observation: numpy array, last observation.
+      action: int, the action taken.
+      reward: float, the reward.
+      is_terminal: bool, indicating if the current state is a terminal state.
+      is_beginning: bool, indicating if the current state is a beginning state.
+    """
+    self._replay.add(last_observation, action, reward, is_terminal, is_beginning)
 
   def _get_network_type(self):
     """Returns the type of the outputs of a value distribution network.
@@ -243,8 +258,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     """
     super(CovariateShiftAgent, self)._build_networks()
 
-    self._replay_next_net_outputs = self.online_convnet(self._replay.next_states)
-    self._replay_target_net_outputs = self.target_convnet(self._replay.states)
+    self._replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
+    self._replay_target_net_outputs = self.target_convnet(self._replay.u_states)
 
   def _build_replay_buffer(self, use_staging):
     """Creates the replay buffer used by the agent.
@@ -307,22 +322,20 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     # size of tiled_support: batch_size x ratio_num_atoms
     tiled_support = tf.tile(self._ratio_support, [batch_size])
     tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
+    # incorporate beginning states, whose tiled support is 1
+    beginning_mask = tf.tile(tf.cast(self._replay.u_beginnings, tf.bool),[1, self._ratio_num_atoms])
+    ones = tf.ones([batch_size, self._ratio_num_atoms])
 
+    tiled_support = tf.where(beginning_mask, ones, tiled_support)
     # size of target_support: batch_size x ratio_num_atoms
-
-    is_beginning_multiplier = 1. - tf.cast(self._replay.terminals, tf.float32)
-    # Incorporate beginning state to ratio discount factor.
-    # size of gamma_with_beginning: batch_size x 1
-    gamma_with_beginning = self.ratio_discount_factor * is_beginning_multiplier
-    gamma_with_beginning = gamma_with_beginning[:, None]
 
     # Compute the quotient of policies
     policies_quotient = self.compute_policies_quotient()
 
     # Addition of the constant term, 1-discount factor
-    constant_term = tf.tile(1. - gamma_with_beginning, [1, self._ratio_num_atoms])
+    constant_term = tf.tile(1. - self.ratio_discount_factor, [batch_size, self._ratio_num_atoms])
 
-    target_support = gamma_with_beginning * policies_quotient * tiled_support + constant_term
+    target_support = self.ratio_discount_factor * policies_quotient * tiled_support + constant_term
 
     # size of next_probabilities: batch_size x ratio_num_atoms
     probabilities = self._replay_target_net_outputs.c_probabilities
@@ -377,8 +390,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     with tf.control_dependencies([update_priorities_op]):
       if self.summary_writer is not None:
         with tf.variable_scope('Losses'):
-          tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(loss))
+          tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(final_loss))
       # Schaul et al. reports a slightly different rule, where 1/N is also
       # exponentiated by beta. Not doing so seems more reasonable, and did not
       # impact performance in our experiments.
-      return self.optimizer.minimize(tf.reduce_mean(loss)), loss
+      return self.optimizer.minimize(tf.reduce_mean(final_loss)), final_loss

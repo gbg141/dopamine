@@ -37,7 +37,7 @@ import gin.tf
 @gin.configurable(blacklist=['observation_shape', 'stack_size',
                              'update_horizon', 'gamma'])
 class WrappedCSReplayBuffer(
-    prioritized_replay_buffer.WrappedPrioritizedReplayBuffer):
+      prioritized_replay_buffer.WrappedPrioritizedReplayBuffer):
   """Wrapper of OutOfGraphPrioritizedReplayBuffer with both uniform and
   in-graph sampling.
 
@@ -59,7 +59,7 @@ class WrappedCSReplayBuffer(
                update_horizon=1,
                gamma=0.99,
                max_sample_attempts=circular_replay_buffer.MAX_SAMPLE_ATTEMPTS,
-               extra_storage_types=None,
+               extra_storage_types=[ReplayElement('is_beginning', (), np.uint8)],
                observation_dtype=np.uint8):
     """Initializes WrappedPrioritizedReplayBuffer.
 
@@ -114,7 +114,7 @@ class WrappedCSReplayBuffer(
             sample_index_batch, [self.batch_size], [np.int32],
             name='uniform_index_sampling') 
         uniform_transition_tensors = tf.py_func(
-            self.memory.sample_transition_batch, [uniform_sample_indices],
+            self.memory.sample_transition_batch, [self.batch_size, uniform_sample_indices],
             [return_entry.type for return_entry in transition_type],
             name='uniform_replay_sample_py_func')
         self._set_transition_shape(transition_tensors, transition_type)
@@ -184,8 +184,6 @@ class WrappedCSReplayBuffer(
     for element, element_type in zip(transition_tensors, transition_type):
       self.transition[element_type.name] = element
 
-    # TODO(bellemare): These are legacy and should probably be removed in
-    # future versions.
     self.states = self.transition['state']
     self.actions = self.transition['action']
     self.rewards = self.transition['reward']
@@ -203,3 +201,4 @@ class WrappedCSReplayBuffer(
     self.u_next_states = self.uniform_transition['next_state']
     self.u_terminals = self.uniform_transition['terminal']
     self.u_indices = self.uniform_transition['indices']  
+    self.u_beginnings = self.uniform_transition['is_beginning']
