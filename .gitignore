@@ -13,6 +13,8 @@ notebooks/
 *.exe
 *.o
 *.so
+*.pyc
+*.cpython
 
 # Packages #
 ############

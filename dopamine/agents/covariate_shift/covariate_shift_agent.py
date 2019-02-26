@@ -1,7 +1,7 @@
 # coding=utf-8
 # gbg141
 
-"""Agent permorming COP-TD
+"""Agent permorming a Distributional Discounted COP-TD
 
 Details in "Off-Policy Deep Reinforcement Learning by Bootstrapping the Covariate Shift" by 
 Carles Gelada & Marc G. Bellemare (2018)
@@ -17,6 +17,7 @@ import collections
 from dopamine.agents.dqn import dqn_agent
 from dopamine.agents.rainbow import rainbow_agent
 from dopamine.replay_memory import prioritized_replay_buffer, cs_replay_buffer
+from dopamine.replay_memory.circular_replay_buffer import ReplayElement
 import numpy as np
 import tensorflow as tf
 
@@ -55,7 +56,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                summary_writing_frequency=500,
                ratio_num_atoms=51,
                ratio_cmin=0.,
-               ratio_cmax=10.,
+               ratio_cmax=100.,
                ratio_discount_factor=0.99,
                ratio_loss_weight=0.02):
     """Initializes the agent and constructs the components of its graph.
@@ -137,7 +138,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           summary_writing_frequency=summary_writing_frequency)
 
   def begin_episode(self, observation):
-    """Returns the agent's first action for this episode.
+    """Returns the agent's first action for this episode. 
+    
+    Now the internal state is_beginning is added.
 
     Args:
       observation: numpy array, the environment's initial observation.
@@ -149,48 +152,22 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.is_beginning = True
     return action
 
-  def step(self, reward, observation):
-    """Records the most recent transition and returns the agent's next action.
-
-    We store the observation of the last time step since we want to store it
-    with the reward.
-
-    Args:
-      reward: float, the reward received from the agent's most recent action.
-      observation: numpy array, the most recent observation.
-
-    Returns:
-      int, the selected action.
-    """
-    self._last_observation = self._observation
-    self._record_observation(observation)
-
-    if not self.eval_mode:
-      self._store_transition(self._last_observation, self.action, reward, False, self.is_beginning)
-      self._train_step()
-
-    self.action = self._select_action()
-    self.is_beginning = False
-    return self.action
-
-  def _store_transition(self, last_observation, action, reward, is_terminal, is_beginning=False):
-    """Stores an experienced transition.
-
-    Executes a tf session and executes replay buffer ops in order to store the
-    following tuple in the replay buffer:
-      (last_observation, action, reward, is_terminal).
-
-    Pedantically speaking, this does not actually store an entire transition
-    since the next state is recorded on the following time step.
+  def _store_transition(self, last_observation, action, reward, is_terminal, 
+                        is_beginning=None, priority=None):
+    """Stores an experienced transition, extended by the internal state is_beginning.
 
     Args:
       last_observation: numpy array, last observation.
       action: int, the action taken.
       reward: float, the reward.
       is_terminal: bool, indicating if the current state is a terminal state.
-      is_beginning: bool, indicating if the current state is a beginning state.
     """
-    self._replay.add(last_observation, action, reward, is_terminal, is_beginning)
+    is_beginning = is_beginning if is_beginning else self.is_beginning
+    if priority is None:
+      priority = self._replay.memory.sum_tree.max_recorded_priority
+    
+    self._replay.add(last_observation, action, reward, is_terminal, is_beginning, priority)
+    self.is_beginning = False
 
   def _get_network_type(self):
     """Returns the type of the outputs of a value distribution network.
@@ -279,7 +256,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         stack_size=self.stack_size,
         use_staging=use_staging,
         update_horizon=self.update_horizon,
-        gamma=self.gamma)
+        gamma=self.gamma,
+        extra_storage_types=[ReplayElement('beginning', (), np.uint8)])
 
   def compute_policies_quotient(self):
     '''Computes the quotient of policies that appears at the DCOP update
@@ -290,6 +268,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     batch_size = self._replay.batch_size
     qt_argmax_actions = tf.argmax(self._replay_target_net_outputs.q_values, axis=1)[:, None]
     qt_argmax_actions = tf.reshape(qt_argmax_actions, [batch_size,1])
+    qt_argmax_actions = tf.cast(qt_argmax_actions, tf.int32)
     replay_actions = tf.reshape(self._replay.actions, [batch_size,1])
 
     coincidences = tf.equal(qt_argmax_actions, replay_actions)
@@ -323,7 +302,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     tiled_support = tf.tile(self._ratio_support, [batch_size])
     tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
     # incorporate beginning states, whose tiled support is 1
-    beginning_mask = tf.tile(tf.cast(self._replay.u_beginnings, tf.bool),[1, self._ratio_num_atoms])
+    beginning_mask = tf.tile(self._replay.uniform_transition['beginning'],
+                             [self._ratio_num_atoms])
+    beginning_mask = tf.reshape(beginning_mask, [batch_size, self._ratio_num_atoms])
+    beginning_mask = tf.cast(beginning_mask, tf.bool)
     ones = tf.ones([batch_size, self._ratio_num_atoms])
 
     tiled_support = tf.where(beginning_mask, ones, tiled_support)
@@ -333,15 +315,15 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     policies_quotient = self.compute_policies_quotient()
 
     # Addition of the constant term, 1-discount factor
-    constant_term = tf.tile(1. - self.ratio_discount_factor, [batch_size, self._ratio_num_atoms])
+    constant_term = tf.fill([batch_size, self._ratio_num_atoms], 1. - self.ratio_discount_factor)
 
     target_support = self.ratio_discount_factor * policies_quotient * tiled_support + constant_term
 
     # size of next_probabilities: batch_size x ratio_num_atoms
     probabilities = self._replay_target_net_outputs.c_probabilities
+    probabilities = tf.reshape(probabilities, [batch_size, self._ratio_num_atoms])
 
-    return rainbow_agent.project_distribution(target_support, probabilities,
-                                              self._ratio_support)
+    return rainbow_agent.project_distribution(target_support, probabilities, self._ratio_support)
   
   def _build_train_op(self):
     """Builds a training op.
@@ -378,8 +360,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     loss_weights = 1.0 / tf.sqrt(probs + 1e-10)
     loss_weights /= tf.reduce_max(loss_weights)
 
+    priorities = tf.reshape(self._replay_net_outputs.c_values, [-1])
     update_priorities_op = self._replay.tf_set_priority(
-          self._replay.indices, self._replay_net_outputs.c_values)
+          self._replay.indices, priorities)
     
     # Weight the loss by the inverse priorities.
     loss = loss_weights * loss

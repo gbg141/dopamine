@@ -59,7 +59,7 @@ class WrappedCSReplayBuffer(
                update_horizon=1,
                gamma=0.99,
                max_sample_attempts=circular_replay_buffer.MAX_SAMPLE_ATTEMPTS,
-               extra_storage_types=[ReplayElement('is_beginning', (), np.uint8)],
+               extra_storage_types=None,
                observation_dtype=np.uint8):
     """Initializes WrappedPrioritizedReplayBuffer.
 
@@ -111,7 +111,7 @@ class WrappedCSReplayBuffer(
             name='replay_sample_py_func')
         uniform_sample_indices = tf.py_func(
             super(prioritized_replay_buffer.OutOfGraphPrioritizedReplayBuffer, self.memory).
-            sample_index_batch, [self.batch_size], [np.int32],
+            sample_index_batch, [self.batch_size], [np.int64 for _ in range(self.batch_size)],
             name='uniform_index_sampling') 
         uniform_transition_tensors = tf.py_func(
             self.memory.sample_transition_batch, [self.batch_size, uniform_sample_indices],
@@ -200,5 +200,4 @@ class WrappedCSReplayBuffer(
     self.u_rewards = self.uniform_transition['reward']
     self.u_next_states = self.uniform_transition['next_state']
     self.u_terminals = self.uniform_transition['terminal']
-    self.u_indices = self.uniform_transition['indices']  
-    self.u_beginnings = self.uniform_transition['is_beginning']
+    self.u_indices = self.uniform_transition['indices']
