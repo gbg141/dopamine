@@ -16,7 +16,7 @@ CovariateShiftAgent.epsilon_train = 1.0
 CovariateShiftAgent.epsilon_eval = 0.1
 CovariateShiftAgent.epsilon_decay_period = 250000  # agent steps
 CovariateShiftAgent.replay_scheme = 'uniform'
-CovariateShiftAgent.tf_device = '/cpu:*' #'/gpu:0', or '/cpu:*' for non-GPU version
+CovariateShiftAgent.tf_device = '/gpu:0' #'/gpu:0', or '/cpu:*' for non-GPU version
 CovariateShiftAgent.optimizer = @tf.train.AdamOptimizer()
 CovariateShiftAgent.ratio_num_atoms=51
 CovariateShiftAgent.ratio_cmin=0.
@@ -36,5 +36,5 @@ Runner.training_steps = 250000  # agent steps
 Runner.evaluation_steps = 125000  # agent steps
 Runner.max_steps_per_episode = 27000  # agent steps
 
-WrappedCSReplayBuffer.replay_capacity = 1000000
+WrappedCSReplayBuffer.replay_capacity = 5000000
 WrappedCSReplayBuffer.batch_size = 32
