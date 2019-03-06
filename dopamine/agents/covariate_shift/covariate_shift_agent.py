@@ -54,6 +54,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                    learning_rate=0.00025, epsilon=0.0003125),
                summary_writer=None,
                summary_writing_frequency=500,
+               quotient_epsilon=0.01,
+               use_loss_weights=False,
                ratio_num_atoms=51,
                ratio_cmin=0.,
                ratio_cmax=100.,
@@ -101,6 +103,15 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       ratio_discount_factor: float, discount factor used in Discounted COP-TD
       ratio_loss_weight: float, loss weight of the covariate shift ratio estimation
     """
+    tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
+    tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
+    tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
+    tf.logging.info('\t ratio_num_atoms: %d', ratio_num_atoms)
+    tf.logging.info('\t ratio_cmin: %f', ratio_cmin)
+    tf.logging.info('\t ratio_cmax: %f', ratio_cmax)
+    tf.logging.info('\t ratio_discount_factor: %f', ratio_discount_factor)
+    tf.logging.info('\t ratio_loss_weight: %f', ratio_loss_weight)
+
     # We need this because some tools convert round floats into ints.
     vmax = float(vmax)
     self._num_atoms = num_atoms
@@ -109,6 +120,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.optimizer = optimizer
 
     # Initializing extra parameters
+    self.quotient_epsilon = quotient_epsilon
+    self.use_loss_weights = use_loss_weights
     ratio_cmin = float(ratio_cmin)
     ratio_cmax = float(ratio_cmax)
     self._ratio_num_atoms = ratio_num_atoms
@@ -217,9 +230,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         activation_fn=None,
         weights_initializer=weights_initializer)
 
-    c_logits = tf.reshape(ratio_net, [-1, 1, self._ratio_num_atoms])
+    c_logits = tf.reshape(ratio_net, [-1, self._ratio_num_atoms])
     c_probabilities = tf.contrib.layers.softmax(c_logits)
-    c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=2)
+    c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=1)
 
     logits = tf.reshape(net, [-1, self.num_actions, self._num_atoms])
     probabilities = tf.contrib.layers.softmax(logits)
@@ -235,8 +248,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     """
     super(CovariateShiftAgent, self)._build_networks()
 
-    self._replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
-    self._replay_target_net_outputs = self.target_convnet(self._replay.u_states)
+    self._u_replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
+    self._u_replay_target_net_outputs = self.target_convnet(self._replay.u_states)
 
   def _build_replay_buffer(self, use_staging):
     """Creates the replay buffer used by the agent.
@@ -257,7 +270,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         use_staging=use_staging,
         update_horizon=self.update_horizon,
         gamma=self.gamma,
-        extra_storage_types=[ReplayElement('beginning', (), np.uint8)])
+        extra_storage_types=[ReplayElement('beginning', (), np.bool)])
 
   def compute_policies_quotient(self):
     '''Computes the quotient of policies that appears at the DCOP update
@@ -266,15 +279,14 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       policies_quotient: tf.tensor, the quotient from the replay
     '''
     batch_size = self._replay.batch_size
-    qt_argmax_actions = tf.argmax(self._replay_target_net_outputs.q_values, axis=1)[:, None]
-    qt_argmax_actions = tf.reshape(qt_argmax_actions, [batch_size,1])
-    qt_argmax_actions = tf.cast(qt_argmax_actions, tf.int32)
-    replay_actions = tf.reshape(self._replay.actions, [batch_size,1])
 
+    qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
+                                  axis=1, output_type=tf.int32)
+    replay_actions = self._replay.actions
     coincidences = tf.equal(qt_argmax_actions, replay_actions)
 
-    coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.epsilon_eval))
-    no_coincidence_quotient = tf.fill([batch_size,1], self.epsilon_eval)
+    coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon))
+    no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon)
 
     policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient)
     return policies_quotient
@@ -302,14 +314,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     tiled_support = tf.tile(self._ratio_support, [batch_size])
     tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
     # incorporate beginning states, whose tiled support is 1
-    beginning_mask = tf.tile(self._replay.uniform_transition['beginning'],
-                             [self._ratio_num_atoms])
-    beginning_mask = tf.reshape(beginning_mask, [batch_size, self._ratio_num_atoms])
-    beginning_mask = tf.cast(beginning_mask, tf.bool)
-    ones = tf.ones([batch_size, self._ratio_num_atoms])
-
-    tiled_support = tf.where(beginning_mask, ones, tiled_support)
-    # size of target_support: batch_size x ratio_num_atoms
+    beginning_mask = self._replay.uniform_transition['beginning']
+    tiled_support = tf.where(beginning_mask, tf.ones(tf.shape(tiled_support)), tiled_support)
 
     # Compute the quotient of policies
     policies_quotient = self.compute_policies_quotient()
@@ -317,11 +323,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     # Addition of the constant term, 1-discount factor
     constant_term = tf.fill([batch_size, self._ratio_num_atoms], 1. - self.ratio_discount_factor)
 
+    # size of target_support: batch_size x ratio_num_atoms
     target_support = self.ratio_discount_factor * policies_quotient * tiled_support + constant_term
 
     # size of next_probabilities: batch_size x ratio_num_atoms
-    probabilities = self._replay_target_net_outputs.c_probabilities
-    probabilities = tf.reshape(probabilities, [batch_size, self._ratio_num_atoms])
+    probabilities = self._u_replay_target_net_outputs.c_probabilities
 
     return rainbow_agent.project_distribution(target_support, probabilities, self._ratio_support)
   
@@ -334,12 +340,16 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     # Loss of the ratio model
     c_target_distribution = tf.stop_gradient(self._build_target_c_distribution())
 
-    c_logits = self._replay_next_net_outputs.c_logits
+    c_logits = self._u_replay_next_net_outputs.c_logits
 
     c_loss = tf.nn.softmax_cross_entropy_with_logits(
         labels=c_target_distribution,
         logits=c_logits)
     c_loss = tf.scalar_mul(self.ratio_loss_weight, c_loss)
+
+    # Avoid training with undefined next states (i.e. terminal states)
+    terminal_mask = 1. - tf.cast(self._replay.uniform_transition['terminal'], tf.float32)
+    c_loss = terminal_mask * c_loss
 
     # Loss os the Q model
     target_distribution = tf.stop_gradient(self._build_target_distribution())
@@ -356,19 +366,23 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         labels=target_distribution,
         logits=chosen_action_logits)
 
-    probs = self._replay.transition['sampling_probabilities']
-    loss_weights = 1.0 / tf.sqrt(probs + 1e-10)
-    loss_weights /= tf.reduce_max(loss_weights)
-
-    priorities = tf.reshape(self._replay_net_outputs.c_values, [-1])
-    update_priorities_op = self._replay.tf_set_priority(
-          self._replay.indices, priorities)
-    
-    # Weight the loss by the inverse priorities.
-    loss = loss_weights * loss
+    if self.use_loss_weights:
+      # Weight the loss by the inverse priorities.
+      probs = self._replay.transition['sampling_probabilities']
+      loss_weights = 1.0 / tf.sqrt(probs + 1e-10)
+      loss_weights /= tf.reduce_max(loss_weights)
+      loss = loss_weights * loss
 
     # Generate the final loss
     final_loss = loss + c_loss
+
+    # Update priorities, being those of beginnings 1
+    priorities = self._replay_net_outputs.c_values
+    beginning_mask = self._replay.transition['beginning']
+    priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities)
+
+    update_priorities_op = self._replay.tf_set_priority(
+          self._replay.indices, priorities)
 
     with tf.control_dependencies([update_priorities_op]):
       if self.summary_writer is not None:

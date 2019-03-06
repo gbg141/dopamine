@@ -60,7 +60,11 @@ class WrappedCSReplayBuffer(
                gamma=0.99,
                max_sample_attempts=circular_replay_buffer.MAX_SAMPLE_ATTEMPTS,
                extra_storage_types=None,
-               observation_dtype=np.uint8):
+               observation_dtype=np.uint8,
+               action_shape=(),
+               action_dtype=np.int32,
+               reward_shape=(),
+               reward_dtype=np.float32):
     """Initializes WrappedPrioritizedReplayBuffer.
 
     Args:
@@ -78,6 +82,12 @@ class WrappedCSReplayBuffer(
         contents that will be stored and returned by sample_transition_batch.
       observation_dtype: np.dtype, type of the observations. Defaults to
         np.uint8 for Atari 2600.
+      action_shape: tuple of ints, the shape for the action vector. Empty tuple
+        means the action is a scalar.
+      action_dtype: np.dtype, type of elements in the action.
+      reward_shape: tuple of ints, the shape of the reward vector. Empty tuple
+        means the reward is a scalar.
+      reward_dtype: np.dtype, type of elements in the reward.
 
     Raises:
       ValueError: If update_horizon is not positive.
@@ -91,8 +101,14 @@ class WrappedCSReplayBuffer(
         batch_size,
         update_horizon,
         gamma,
-        extra_storage_types=extra_storage_types)
-
+        max_sample_attempts=max_sample_attempts,
+        extra_storage_types=extra_storage_types,
+        observation_dtype=observation_dtype,
+        action_shape=action_shape,
+        action_dtype=action_dtype,
+        reward_shape=reward_shape,
+        reward_dtype=reward_dtype)
+  
   def create_sampling_ops(self, use_staging):
     """Creates the ops necessary to sample from the replay buffer.
 
@@ -112,7 +128,7 @@ class WrappedCSReplayBuffer(
         uniform_sample_indices = tf.py_func(
             super(prioritized_replay_buffer.OutOfGraphPrioritizedReplayBuffer, self.memory).
             sample_index_batch, [self.batch_size], [np.int64 for _ in range(self.batch_size)],
-            name='uniform_index_sampling') 
+            name='uniform_index_sampling')
         uniform_transition_tensors = tf.py_func(
             self.memory.sample_transition_batch, [self.batch_size, uniform_sample_indices],
             [return_entry.type for return_entry in transition_type],
@@ -120,14 +136,15 @@ class WrappedCSReplayBuffer(
         self._set_transition_shape(transition_tensors, transition_type)
         self._set_transition_shape(uniform_transition_tensors, transition_type)
         if use_staging:
-          transition_tensors, uniform_transition_tensors = self._set_up_staging(transition_tensors, uniform_transition_tensors)
+          transition_tensors = self._set_up_staging(transition_tensors)
+          uniform_transition_tensors = self._set_up_staging(uniform_transition_tensors)
           self._set_transition_shape(transition_tensors, transition_type)
           self._set_transition_shape(uniform_transition_tensors, transition_type)
 
         # Unpack sample transition into member variables.
         self.unpack_transition(transition_tensors, uniform_transition_tensors, transition_type)
 
-  def _set_up_staging(self, transition, u_transition):
+  def _set_up_staging(self, transition, is_uniform=False):
     """Sets up staging ops for prefetching the next transition.
 
     This allows us to hide the py_func latency. To do so we use a staging area
@@ -135,8 +152,6 @@ class WrappedCSReplayBuffer(
 
     Args:
       transition: tuple of tf.Tensors with shape
-        memory.get_transition_elements().
-      u_transition: tuple of tf.Tensors with shape
         memory.get_transition_elements().
 
     Returns:
@@ -148,29 +163,25 @@ class WrappedCSReplayBuffer(
     # Create the staging area in CPU.
     prefetch_area = tf.contrib.staging.StagingArea(
         [shape_with_type.type for shape_with_type in transition_type])
-    u_prefetch_area = tf.contrib.staging.StagingArea(
-        [shape_with_type.type for shape_with_type in transition_type])
 
     # Store prefetch op for tests, but keep it private -- users should not be
     # calling _prefetch_batch.
-    self._prefetch_batch = prefetch_area.put(transition)
+    prefetch_batch = prefetch_area.put(transition)
     initial_prefetch = tf.cond(
         tf.equal(prefetch_area.size(), 0),
         lambda: prefetch_area.put(transition), tf.no_op)
-    
-    self._u_prefetch_batch = u_prefetch_area.put(transition)
-    u_initial_prefetch = tf.cond(
-        tf.equal(u_prefetch_area.size(), 0),
-        lambda: u_prefetch_area.put(u_transition), tf.no_op)
 
     # Every time a transition is sampled self.prefetch_batch will be
     # called. If the staging area is empty, two put ops will be called.
-    with tf.control_dependencies([self._prefetch_batch, initial_prefetch, 
-                                  self._u_prefetch_batch, u_initial_prefetch]):
+    with tf.control_dependencies([prefetch_batch, initial_prefetch]):
       prefetched_transition = prefetch_area.get()
-      u_prefetched_transition = u_prefetch_area.get()
 
-    return prefetched_transition, u_prefetched_transition
+    if is_uniform:
+      self._u_prefetch_batch = prefetch_batch
+    else:
+      self._prefetch_batch = prefetch_batch
+    
+    return prefetched_transition
 
   def unpack_transition(self, transition_tensors, uniform_transition_tensors, transition_type):
     """Unpacks the given transition into member variables.
