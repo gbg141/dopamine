@@ -54,7 +54,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                    learning_rate=0.00025, epsilon=0.0003125),
                summary_writer=None,
                summary_writing_frequency=500,
-               quotient_epsilon=0.01,
+               use_ratio_model=True,
+               quotient_epsilon=0.1,
                use_loss_weights=False,
                ratio_num_atoms=51,
                ratio_cmin=0.,
@@ -103,15 +104,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       ratio_discount_factor: float, discount factor used in Discounted COP-TD
       ratio_loss_weight: float, loss weight of the covariate shift ratio estimation
     """
-    tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
-    tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
-    tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
-    tf.logging.info('\t ratio_num_atoms: %d', ratio_num_atoms)
-    tf.logging.info('\t ratio_cmin: %f', ratio_cmin)
-    tf.logging.info('\t ratio_cmax: %f', ratio_cmax)
-    tf.logging.info('\t ratio_discount_factor: %f', ratio_discount_factor)
-    tf.logging.info('\t ratio_loss_weight: %f', ratio_loss_weight)
-
     # We need this because some tools convert round floats into ints.
     vmax = float(vmax)
     self._num_atoms = num_atoms
@@ -120,6 +112,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.optimizer = optimizer
 
     # Initializing extra parameters
+    self.use_ratio_model = use_ratio_model
     self.quotient_epsilon = quotient_epsilon
     self.use_loss_weights = use_loss_weights
     ratio_cmin = float(ratio_cmin)
@@ -128,6 +121,16 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self._ratio_support = tf.linspace(ratio_cmin, ratio_cmax, ratio_num_atoms)
     self.ratio_discount_factor = ratio_discount_factor
     self.ratio_loss_weight = ratio_loss_weight
+
+    if self.use_ratio_model:
+      tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
+      tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
+      tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
+      tf.logging.info('\t ratio_num_atoms: %d', ratio_num_atoms)
+      tf.logging.info('\t ratio_cmin: %f', ratio_cmin)
+      tf.logging.info('\t ratio_cmax: %f', ratio_cmax)
+      tf.logging.info('\t ratio_discount_factor: %f', ratio_discount_factor)
+      tf.logging.info('\t ratio_loss_weight: %f', ratio_loss_weight)
 
     super(CovariateShiftAgent, self).__init__(
           sess=sess,
@@ -337,19 +340,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     Returns:
       train_op: An op performing one step of training from replay data.
     """
-    # Loss of the ratio model
-    c_target_distribution = tf.stop_gradient(self._build_target_c_distribution())
-
-    c_logits = self._u_replay_next_net_outputs.c_logits
-
-    c_loss = tf.nn.softmax_cross_entropy_with_logits(
-        labels=c_target_distribution,
-        logits=c_logits)
-    c_loss = tf.scalar_mul(self.ratio_loss_weight, c_loss)
-
-    # Avoid training with undefined next states (i.e. terminal states)
-    terminal_mask = 1. - tf.cast(self._replay.uniform_transition['terminal'], tf.float32)
-    c_loss = terminal_mask * c_loss
 
     # Loss os the Q model
     target_distribution = tf.stop_gradient(self._build_target_distribution())
@@ -373,17 +363,35 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       loss_weights /= tf.reduce_max(loss_weights)
       loss = loss_weights * loss
 
-    # Generate the final loss
-    final_loss = loss + c_loss
+    if self.use_ratio_model:
+      # Loss of the ratio model
+      c_target_distribution = tf.stop_gradient(self._build_target_c_distribution())
 
-    # Update priorities, being those of beginnings 1
-    priorities = self._replay_net_outputs.c_values
-    beginning_mask = self._replay.transition['beginning']
-    priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities)
+      c_logits = self._u_replay_next_net_outputs.c_logits
 
-    update_priorities_op = self._replay.tf_set_priority(
-          self._replay.indices, priorities)
+      c_loss = tf.nn.softmax_cross_entropy_with_logits(
+          labels=c_target_distribution,
+          logits=c_logits)
+      c_loss = tf.scalar_mul(self.ratio_loss_weight, c_loss)
 
+      # Avoid training with undefined next states (i.e. terminal states)
+      terminal_mask = 1. - tf.cast(self._replay.uniform_transition['terminal'], tf.float32)
+      c_loss = terminal_mask * c_loss
+
+      # Generate the final loss
+      final_loss = loss + c_loss
+
+      # Update priorities, being those of beginnings 1
+      priorities = self._replay_net_outputs.c_values
+      beginning_mask = self._replay.transition['beginning']
+      priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities)
+
+      update_priorities_op = self._replay.tf_set_priority(
+            self._replay.indices, priorities)
+    else:
+      final_loss = loss
+      update_priorities_op = tf.no_op()
+    
     with tf.control_dependencies([update_priorities_op]):
       if self.summary_writer is not None:
         with tf.variable_scope('Losses'):
