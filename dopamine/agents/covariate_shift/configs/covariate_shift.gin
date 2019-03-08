@@ -18,12 +18,13 @@ CovariateShiftAgent.epsilon_decay_period = 250000  # agent steps
 CovariateShiftAgent.replay_scheme = 'uniform'
 CovariateShiftAgent.tf_device = '/gpu:0' #'/gpu:0', or '/cpu:*' for non-GPU version
 CovariateShiftAgent.optimizer = @tf.train.AdamOptimizer()
+CovariateShiftAgent.summary_writer = True
 CovariateShiftAgent.use_loss_weights = False
-CovariateShiftAgent.ratio_num_atoms=51
-CovariateShiftAgent.ratio_cmin=0.
-CovariateShiftAgent.ratio_cmax=100.
-CovariateShiftAgent.ratio_discount_factor=0.99
-CovariateShiftAgent.ratio_loss_weight=0.02
+CovariateShiftAgent.ratio_num_atoms = 51
+CovariateShiftAgent.ratio_cmin = 0.
+CovariateShiftAgent.ratio_cmax = 100.
+CovariateShiftAgent.ratio_discount_factor = 0.99
+CovariateShiftAgent.ratio_loss_weight = 0.02
 
 tf.train.AdamOptimizer.learning_rate = 0.00025
 tf.train.AdamOptimizer.epsilon = 0.0003125
@@ -32,6 +33,7 @@ atari_lib.create_atari_environment.game_name = 'Seaquest'
 # Sticky actions with probability 0.25, as suggested by (Machado et al., 2017).
 atari_lib.create_atari_environment.sticky_actions = True
 create_agent.agent_name = 'covariate_shift'
+create_agent.debug_mode = True
 Runner.num_iterations = 200
 Runner.training_steps = 250000  # agent steps
 Runner.evaluation_steps = 125000  # agent steps

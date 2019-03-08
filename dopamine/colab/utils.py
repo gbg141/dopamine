@@ -197,6 +197,7 @@ def read_experiment(log_path,
                     iteration_number=None,
                     summary_keys=('train_episode_returns',
                                   'eval_episode_returns'),
+                    experiment_path=None, 
                     verbose=False):
   """Reads in a set of experimental results from log_path.
 
@@ -260,8 +261,8 @@ def read_experiment(log_path,
       # Construct name for values.
       name = '-'.join([keys[i] + '_' + str(parameter_tuple[i])
                        for i in range(len(keys))])
-
-    experiment_path = '{}/{}/logs'.format(log_path, name)
+    if not experiment_path:
+      experiment_path = '{}/{}/logs'.format(log_path, name)
 
     raw_data, last_iteration = load_statistics(
         experiment_path, iteration_number=iteration_number, verbose=verbose)

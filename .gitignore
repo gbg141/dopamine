@@ -4,6 +4,7 @@
 .vscode/
 .ipynb_checkpoints/
 notebooks/
+logs/
 
 # Compiled source #
 ###################
