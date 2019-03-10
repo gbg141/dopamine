@@ -125,12 +125,15 @@ class WrappedCSReplayBuffer(
             self.memory.sample_transition_batch, [],
             [return_entry.type for return_entry in transition_type],
             name='replay_sample_py_func')
-        uniform_sample_indices = tf.py_func(
-            super(prioritized_replay_buffer.OutOfGraphPrioritizedReplayBuffer, self.memory).
-            sample_index_batch, [self.batch_size], [np.int64 for _ in range(self.batch_size)],
-            name='uniform_index_sampling')
+
+        def sample_uniform_transition_tensors():
+          uniform_sample_indices = super(prioritized_replay_buffer.OutOfGraphPrioritizedReplayBuffer, 
+                                         self.memory).sample_index_batch(self.batch_size)
+          uniform_transition_tensors = self.memory.sample_transition_batch(self.batch_size, uniform_sample_indices)
+          return uniform_transition_tensors
+        
         uniform_transition_tensors = tf.py_func(
-            self.memory.sample_transition_batch, [self.batch_size, uniform_sample_indices],
+            sample_uniform_transition_tensors, [],
             [return_entry.type for return_entry in transition_type],
             name='uniform_replay_sample_py_func')
         self._set_transition_shape(transition_tensors, transition_type)
