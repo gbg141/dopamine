@@ -118,6 +118,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     # Initializing extra parameters
     self.use_ratio_model = use_ratio_model
+    self.use_priorities = use_priorities
     self.quotient_epsilon = quotient_epsilon
     self.use_loss_weights = use_loss_weights
     ratio_cmin = float(ratio_cmin)
