@@ -55,6 +55,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                summary_writer=None,
                summary_writing_frequency=500,
                use_ratio_model=True,
+               use_priorities=True,
                quotient_epsilon=0.1,
                use_loss_weights=False,
                ratio_num_atoms=51,
@@ -98,6 +99,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         Summary writing disabled if set to None.
       summary_writing_frequency: int, frequency with which summaries will be
         written. Lower values will result in slower training.
+      use_ratio_model: bool, whether to train the ratio model or not,
+      use_priorities: bool, whether to use priorities from the ratio model
+      quotient_epsilon: float, epsilon used when computing the quotient of policies
+      use_loss_weights: bool, whether to use loss weights of the Q model
       ratio_num_atoms: int, the number of buckets of the ratio function distribution.
       ratio_cmin: float, the predefined minimum ratio value
       ratio_cmax: float, the predefined maximum ratio value
@@ -385,9 +390,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       priorities = self._replay_net_outputs.c_values
       beginning_mask = self._replay.transition['beginning']
       priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities)
-
-      update_priorities_op = self._replay.tf_set_priority(
-            self._replay.indices, priorities)
+      if self.use_priorities:
+        update_priorities_op = self._replay.tf_set_priority(
+              self._replay.indices, priorities)
+      else:
+        update_priorities_op = tf.no_op()  
     else:
       final_loss = loss
       update_priorities_op = tf.no_op()
@@ -396,6 +403,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       if self.summary_writer is not None:
         with tf.variable_scope('Losses'):
           tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(final_loss))
+          if self.use_ratio_model:
+            tf.summary.scalar('RatioLoss', tf.reduce_mean(c_loss))
+            tf.summary.scalar('QLoss', tf.reduce_mean(loss))
+        if self.use_ratio_model:
+          with tf.variable_scope('CSratio'):
+            tf.summary.scalar('MeanRatioValues', tf.reduce_mean(priorities))
       # Schaul et al. reports a slightly different rule, where 1/N is also
       # exponentiated by beta. Not doing so seems more reasonable, and did not
       # impact performance in our experiments.
