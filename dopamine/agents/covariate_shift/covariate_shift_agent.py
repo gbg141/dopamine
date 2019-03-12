@@ -59,8 +59,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                quotient_epsilon=0.1,
                use_loss_weights=False,
                ratio_num_atoms=51,
-               ratio_cmin=0.,
-               ratio_cmax=100.,
+               ratio_cmin=None,
+               ratio_cmax=None,
                ratio_discount_factor=0.99,
                ratio_loss_weight=0.02):
     """Initializes the agent and constructs the components of its graph.
@@ -121,8 +121,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.use_priorities = use_priorities
     self.quotient_epsilon = quotient_epsilon
     self.use_loss_weights = use_loss_weights
-    ratio_cmin = float(ratio_cmin)
-    ratio_cmax = float(ratio_cmax)
+    ratio_cmin = float(ratio_cmin) if ratio_cmin is not None else self.quotient_epsilon
+    ratio_cmax = float(ratio_cmax) if ratio_cmax is not None else float(num_actions)
     self._ratio_num_atoms = ratio_num_atoms
     self._ratio_support = tf.linspace(ratio_cmin, ratio_cmax, ratio_num_atoms)
     self.ratio_discount_factor = ratio_discount_factor
@@ -378,14 +378,13 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       c_loss = tf.nn.softmax_cross_entropy_with_logits(
           labels=c_target_distribution,
           logits=c_logits)
-      c_loss = tf.scalar_mul(self.ratio_loss_weight, c_loss)
 
       # Avoid training with undefined next states (i.e. terminal states)
       terminal_mask = 1. - tf.cast(self._replay.uniform_transition['terminal'], tf.float32)
       c_loss = terminal_mask * c_loss
 
       # Generate the final loss
-      final_loss = loss + c_loss
+      final_loss = loss + self.ratio_loss_weight * c_loss
 
       # Update priorities, being those of beginnings 1
       priorities = self._replay_net_outputs.c_values
@@ -410,6 +409,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         if self.use_ratio_model:
           with tf.variable_scope('CSratio'):
             tf.summary.scalar('MeanRatioValues', tf.reduce_mean(priorities))
+          with tf.variable_scope('Masks'):
+            tf.summary.scalar('BeginningMask', tf.reduce_sum(tf.cast(beginning_mask, tf.int8)))
+            tf.summary.scalar('TerminalMask', tf.reduce_sum(terminal_mask))
       # Schaul et al. reports a slightly different rule, where 1/N is also
       # exponentiated by beta. Not doing so seems more reasonable, and did not
       # impact performance in our experiments.

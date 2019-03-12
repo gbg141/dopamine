@@ -20,12 +20,12 @@ CovariateShiftAgent.tf_device = '/gpu:0' #'/gpu:0', or '/cpu:*' for non-GPU vers
 CovariateShiftAgent.optimizer = @tf.train.AdamOptimizer()
 CovariateShiftAgent.summary_writer = True
 CovariateShiftAgent.use_ratio_model = True
-CovariateShiftAgent.use_priorities = False
+CovariateShiftAgent.use_priorities = True
 CovariateShiftAgent.quotient_epsilon = 0.1
 CovariateShiftAgent.use_loss_weights = False
 CovariateShiftAgent.ratio_num_atoms = 51
-CovariateShiftAgent.ratio_cmin = 0.
-CovariateShiftAgent.ratio_cmax = 100.
+CovariateShiftAgent.ratio_cmin = None
+CovariateShiftAgent.ratio_cmax = None
 CovariateShiftAgent.ratio_discount_factor = 0.99
 CovariateShiftAgent.ratio_loss_weight = 0.02
 
