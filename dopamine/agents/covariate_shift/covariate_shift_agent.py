@@ -239,13 +239,14 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         activation_fn=None,
         weights_initializer=weights_initializer)
 
-    c_logits = tf.reshape(ratio_net, [-1, self._ratio_num_atoms])
-    c_probabilities = tf.contrib.layers.softmax(c_logits)
-    c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=1)
+    with tf.name_scope('network_outputs'):
+      c_logits = tf.reshape(ratio_net, [-1, self._ratio_num_atoms])
+      c_probabilities = tf.contrib.layers.softmax(c_logits)
+      c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=1, name='c_values')
 
-    logits = tf.reshape(net, [-1, self.num_actions, self._num_atoms])
-    probabilities = tf.contrib.layers.softmax(logits)
-    q_values = tf.reduce_sum(self._support * probabilities, axis=2)
+      logits = tf.reshape(net, [-1, self.num_actions, self._num_atoms])
+      probabilities = tf.contrib.layers.softmax(logits)
+      q_values = tf.reduce_sum(self._support * probabilities, axis=2, name='q_values')
     return self._get_network_type()(c_values, c_logits, c_probabilities, q_values, logits, probabilities)
 
   def _build_networks(self):
@@ -289,15 +290,16 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     '''
     batch_size = self._replay.batch_size
 
-    qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
-                                  axis=1, output_type=tf.int32)
-    replay_actions = self._replay.actions
-    coincidences = tf.equal(qt_argmax_actions, replay_actions)
+    with tf.name_scope('policies_quotient'):
+      qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
+                                    axis=1, output_type=tf.int32, name='qt_argmax_actions')
+      replay_actions = self._replay.actions
+      coincidences = tf.equal(qt_argmax_actions, replay_actions)
 
-    coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon))
-    no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon)
+      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon))
+      no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon)
 
-    policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient)
+      policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
     return policies_quotient
 
   def _build_target_c_distribution(self):
@@ -318,25 +320,27 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       target_distribution: tf.tensor, the target distribution from the replay.
     """
     batch_size = self._replay.batch_size
+    with tf.name_scope('c_target_distribution'):
+      # size of tiled_support: batch_size x ratio_num_atoms
+      tiled_support = tf.tile(self._ratio_support, [batch_size])
+      tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
+      # incorporate beginning states, whose tiled support is 1
+      beginning_mask = self._replay.uniform_transition['beginning']
+      tiled_support = tf.where(beginning_mask, tf.ones(tf.shape(tiled_support)), tiled_support, name='tiled_support')
 
-    # size of tiled_support: batch_size x ratio_num_atoms
-    tiled_support = tf.tile(self._ratio_support, [batch_size])
-    tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
-    # incorporate beginning states, whose tiled support is 1
-    beginning_mask = self._replay.uniform_transition['beginning']
-    tiled_support = tf.where(beginning_mask, tf.ones(tf.shape(tiled_support)), tiled_support)
+      # Compute the quotient of policies
+      policies_quotient = self.compute_policies_quotient()
 
-    # Compute the quotient of policies
-    policies_quotient = self.compute_policies_quotient()
+      # Addition of the constant term, 1-discount factor
+      constant_term = tf.fill([batch_size, self._ratio_num_atoms], 1. - self.ratio_discount_factor)
 
-    # Addition of the constant term, 1-discount factor
-    constant_term = tf.fill([batch_size, self._ratio_num_atoms], 1. - self.ratio_discount_factor)
+      # size of target_support: batch_size x ratio_num_atoms
+      target_support = tf.identity(self.ratio_discount_factor * policies_quotient * tiled_support + constant_term, 
+                                   name='target_support')
 
-    # size of target_support: batch_size x ratio_num_atoms
-    target_support = self.ratio_discount_factor * policies_quotient * tiled_support + constant_term
-
-    # size of next_probabilities: batch_size x ratio_num_atoms
-    probabilities = self._u_replay_target_net_outputs.c_probabilities
+      # size of next_probabilities: batch_size x ratio_num_atoms
+      probabilities = tf.identity(self._u_replay_target_net_outputs.c_probabilities,
+                                  name='probabilities')
 
     return rainbow_agent.project_distribution(target_support, probabilities, self._ratio_support)
   
@@ -371,30 +375,32 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     if self.use_ratio_model:
       # Loss of the ratio model
-      c_target_distribution = tf.stop_gradient(self._build_target_c_distribution())
+      with tf.name_scope('c_train_op'):
+        c_target_distribution = tf.stop_gradient(self._build_target_c_distribution(), name='c_distribution')
 
-      c_logits = self._u_replay_next_net_outputs.c_logits
+        c_logits = tf.identity(self._u_replay_next_net_outputs.c_logits, name='c_logits')
 
-      c_loss = tf.nn.softmax_cross_entropy_with_logits(
-          labels=c_target_distribution,
-          logits=c_logits)
+        c_loss = tf.nn.softmax_cross_entropy_with_logits(
+            labels=c_target_distribution,
+            logits=c_logits,
+            name='c_loss')
 
-      # Avoid training with undefined next states (i.e. terminal states)
-      terminal_mask = 1. - tf.cast(self._replay.uniform_transition['terminal'], tf.float32)
-      c_loss = terminal_mask * c_loss
+        # Avoid training with undefined next states (i.e. terminal states)
+        terminal_mask = 1. - tf.cast(self._replay.uniform_transition['terminal'], tf.float32, name='terminal')
+        c_loss = terminal_mask * c_loss
 
-      # Generate the final loss
-      final_loss = loss + self.ratio_loss_weight * c_loss
+        # Generate the final loss
+        final_loss = loss + self.ratio_loss_weight * c_loss
 
-      # Update priorities, being those of beginnings 1
-      priorities = self._replay_net_outputs.c_values
-      beginning_mask = self._replay.transition['beginning']
-      priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities)
-      if self.use_priorities:
-        update_priorities_op = self._replay.tf_set_priority(
-              self._replay.indices, priorities)
-      else:
-        update_priorities_op = tf.no_op()  
+        # Update priorities, being those of beginnings 1
+        priorities = self._replay_net_outputs.c_values
+        beginning_mask = self._replay.transition['beginning']
+        priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities, name='priorities')
+        if self.use_priorities:
+          update_priorities_op = self._replay.tf_set_priority(
+                self._replay.indices, priorities)
+        else:
+          update_priorities_op = tf.no_op()  
     else:
       final_loss = loss
       update_priorities_op = tf.no_op()
