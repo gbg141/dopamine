@@ -258,8 +258,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     """
     super(CovariateShiftAgent, self)._build_networks()
 
-    self._u_replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
-    self._u_replay_target_net_outputs = self.target_convnet(self._replay.u_states)
+    with tf.name_scope('u_replay'):
+      self._u_replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
+      self._u_replay_target_net_outputs = self.target_convnet(self._replay.u_states)
 
   def _build_replay_buffer(self, use_staging):
     """Creates the replay buffer used by the agent.
@@ -294,10 +295,13 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
                                     axis=1, output_type=tf.int32, name='qt_argmax_actions')
       replay_actions = self._replay.actions
-      coincidences = tf.equal(qt_argmax_actions, replay_actions)
+      replay_actions = tf.identity(replay_actions, name='replay_actions')
+      coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
 
-      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon))
-      no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon)
+      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon), 
+                                     name='coincidence_value')
+      no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon,
+                                        name='no_coincidence_value')
 
       policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
     return policies_quotient
@@ -326,21 +330,28 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
       # incorporate beginning states, whose tiled support is 1
       beginning_mask = self._replay.uniform_transition['beginning']
-      tiled_support = tf.where(beginning_mask, tf.ones(tf.shape(tiled_support)), tiled_support, name='tiled_support')
+      beginning_mask = tf.identity(beginning_mask, name='beginning_mask')
+      tiled_support = tf.where(beginning_mask, tf.ones(tf.shape(tiled_support)), tiled_support, 
+                               name='tiled_support')
 
       # Compute the quotient of policies
-      policies_quotient = self.compute_policies_quotient()
+      policies_quotient = tf.tile(self.compute_policies_quotient(), [1, self._ratio_num_atoms],
+                                  name='quotient')
 
       # Addition of the constant term, 1-discount factor
-      constant_term = tf.fill([batch_size, self._ratio_num_atoms], 1. - self.ratio_discount_factor)
+      constant_term = tf.fill([batch_size, self._ratio_num_atoms], 1. - self.ratio_discount_factor, 
+                              name='constant_term')
+      
+      # target ratio
+      target_ratio = tf.multiply(policies_quotient, tiled_support, name='target_ratio')
 
       # size of target_support: batch_size x ratio_num_atoms
-      target_support = tf.identity(self.ratio_discount_factor * policies_quotient * tiled_support + constant_term, 
-                                   name='target_support')
+      target_support = tf.add(self.ratio_discount_factor * target_ratio, constant_term, 
+                              name='target_support')
 
       # size of next_probabilities: batch_size x ratio_num_atoms
-      probabilities = tf.identity(self._u_replay_target_net_outputs.c_probabilities,
-                                  name='probabilities')
+      probabilities = self._u_replay_target_net_outputs.c_probabilities
+      probabilities = tf.identity(probabilities, name='probabilities')
 
     return rainbow_agent.project_distribution(target_support, probabilities, self._ratio_support)
   
@@ -378,7 +389,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       with tf.name_scope('c_train_op'):
         c_target_distribution = tf.stop_gradient(self._build_target_c_distribution(), name='c_distribution')
 
-        c_logits = tf.identity(self._u_replay_next_net_outputs.c_logits, name='c_logits')
+        c_logits = self._u_replay_next_net_outputs.c_logits
+        c_logits = tf.identity(c_logits, name='c_logits')
 
         c_loss = tf.nn.softmax_cross_entropy_with_logits(
             labels=c_target_distribution,
@@ -390,7 +402,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         c_loss = terminal_mask * c_loss
 
         # Generate the final loss
-        final_loss = loss + self.ratio_loss_weight * c_loss
+        final_loss = tf.add(loss, self.ratio_loss_weight * c_loss, name='final_loss')
 
         # Update priorities, being those of beginnings 1
         priorities = self._replay_net_outputs.c_values
@@ -410,14 +422,18 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         with tf.variable_scope('Losses'):
           tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(final_loss))
           if self.use_ratio_model:
-            tf.summary.scalar('RatioLoss', tf.reduce_mean(c_loss))
-            tf.summary.scalar('QLoss', tf.reduce_mean(loss))
+            tf.summary.scalar('MeanRatioLoss', tf.reduce_mean(c_loss))
+            tf.summary.scalar('MeanQLoss', tf.reduce_mean(loss))
         if self.use_ratio_model:
           with tf.variable_scope('CSratio'):
             tf.summary.scalar('MeanRatioValues', tf.reduce_mean(priorities))
+            tf.summary.tensor_summary('SummaryRatioVaules', priorities)
           with tf.variable_scope('Masks'):
             tf.summary.scalar('BeginningMask', tf.reduce_sum(tf.cast(beginning_mask, tf.int8)))
             tf.summary.scalar('TerminalMask', tf.reduce_sum(terminal_mask))
+          with tf.variable_scope('Histograms'):
+            tf.summary.histogram('c_dist', c_target_distribution[0,:])
+            tf.summary.histogram('c_logits', c_logits[0,:])
       # Schaul et al. reports a slightly different rule, where 1/N is also
       # exponentiated by beta. Not doing so seems more reasonable, and did not
       # impact performance in our experiments.

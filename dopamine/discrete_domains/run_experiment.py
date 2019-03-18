@@ -191,7 +191,7 @@ class Runner(object):
     self._environment = create_environment_fn()
     # Set up a session and initialize variables.
     self._sess = tf.Session('', config=tf.ConfigProto(allow_soft_placement=True))
-    #self._sess = tf_debug.TensorBoardDebugWrapperSession(self._sess, "280dab590c79:7000")
+    #self._sess = tf_debug.TensorBoardDebugWrapperSession(self._sess, "MacBook-Pro-de-Guillermo.local:7000")
     self._agent = create_agent_fn(self._sess, self._environment,
                                   summary_writer=self._summary_writer)
     self._summary_writer.add_graph(graph=tf.get_default_graph())
