@@ -351,7 +351,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
       # size of next_probabilities: batch_size x ratio_num_atoms
       probabilities = self._u_replay_target_net_outputs.c_probabilities
-      probabilities = tf.identity(probabilities, name='probabilities')
 
     return rainbow_agent.project_distribution(target_support, probabilities, self._ratio_support)
   
@@ -425,15 +424,18 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             tf.summary.scalar('MeanRatioLoss', tf.reduce_mean(c_loss))
             tf.summary.scalar('MeanQLoss', tf.reduce_mean(loss))
         if self.use_ratio_model:
-          with tf.variable_scope('CSratio'):
-            tf.summary.scalar('MeanRatioValues', tf.reduce_mean(priorities))
-            tf.summary.tensor_summary('SummaryRatioVaules', priorities)
+          with tf.variable_scope('Priorities'):
+            mean, var = tf.nn.moments(priorities, axes=[0])
+            tf.summary.scalar('MeanPriorities', mean)
+            tf.summary.scalar('VarPriorities', var)
+            tf.summary.text('priorities', tf.as_string(priorities))
           with tf.variable_scope('Masks'):
             tf.summary.scalar('BeginningMask', tf.reduce_sum(tf.cast(beginning_mask, tf.int8)))
             tf.summary.scalar('TerminalMask', tf.reduce_sum(terminal_mask))
           with tf.variable_scope('Histograms'):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
             tf.summary.histogram('c_logits', c_logits[0,:])
+            tf.summary.histogram('c_probs', self._u_replay_target_net_outputs.c_probabilities[0,:])
       # Schaul et al. reports a slightly different rule, where 1/N is also
       # exponentiated by beta. Not doing so seems more reasonable, and did not
       # impact performance in our experiments.

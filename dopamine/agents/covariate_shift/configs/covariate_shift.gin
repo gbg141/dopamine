@@ -26,8 +26,8 @@ CovariateShiftAgent.use_loss_weights = False
 CovariateShiftAgent.ratio_num_atoms = 51
 CovariateShiftAgent.ratio_cmin = 0
 CovariateShiftAgent.ratio_cmax = 100
-CovariateShiftAgent.ratio_discount_factor = 0.98
-CovariateShiftAgent.ratio_loss_weight = 0.01
+CovariateShiftAgent.ratio_discount_factor = 0.97
+CovariateShiftAgent.ratio_loss_weight = 0.002
 
 tf.train.AdamOptimizer.learning_rate = 0.00025
 tf.train.AdamOptimizer.epsilon = 0.0003125
@@ -43,4 +43,4 @@ Runner.evaluation_steps = 125000  # agent steps
 Runner.max_steps_per_episode = 27000  # agent steps
 
 WrappedCSReplayBuffer.replay_capacity = 10000000
-WrappedCSReplayBuffer.batch_size = 32
+WrappedCSReplayBuffer.batch_size = 128
