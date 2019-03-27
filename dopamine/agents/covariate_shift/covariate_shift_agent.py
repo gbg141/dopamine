@@ -15,10 +15,8 @@ import collections
 
 import matplotlib
 matplotlib.use('agg')
-from matplotlib import gridspec
+#from matplotlib import gridspec
 import matplotlib.pyplot as plt
-import tfmpl
-import tfplot
 
 from dopamine.agents.dqn import dqn_agent
 from dopamine.agents.rainbow import rainbow_agent
