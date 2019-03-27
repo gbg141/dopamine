@@ -30,7 +30,7 @@ from dopamine.discrete_domains import run_experiment
 import tensorflow as tf
 
 gin_files = 'dopamine/agents/covariate_shift/configs/covariate_shift.gin'
-#gin_files = 'dopamine/agents/rainbow/configs/rainbow.gin'
+gin_files = 'dopamine/agents/rainbow/configs/rainbow.gin'
 #gin_files = 'dopamine/agents/dqn/configs/dqn.gin'
 
 flags.DEFINE_string('base_dir', '/tmp/dopamine',

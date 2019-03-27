@@ -13,6 +13,12 @@ from __future__ import print_function
 
 import collections
 
+import matplotlib
+matplotlib.use('agg')
+from matplotlib import gridspec
+import matplotlib.pyplot as plt
+import tfmpl
+import tfplot
 
 from dopamine.agents.dqn import dqn_agent
 from dopamine.agents.rainbow import rainbow_agent
@@ -121,10 +127,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.use_priorities = use_priorities
     self.quotient_epsilon = quotient_epsilon
     self.use_loss_weights = use_loss_weights
-    ratio_cmin = float(ratio_cmin) if ratio_cmin is not None else self.quotient_epsilon
-    ratio_cmax = float(ratio_cmax) if ratio_cmax is not None else float(num_actions)
+    self._ratio_cmin = float(ratio_cmin) if ratio_cmin is not None else self.quotient_epsilon
+    self._ratio_cmax = float(ratio_cmax) if ratio_cmax is not None else float(num_actions)
     self._ratio_num_atoms = ratio_num_atoms
-    self._ratio_support = tf.linspace(ratio_cmin, ratio_cmax, ratio_num_atoms)
+    self._ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
     self.ratio_discount_factor = ratio_discount_factor
     self.ratio_loss_weight = ratio_loss_weight
 
@@ -240,11 +246,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         weights_initializer=weights_initializer)
 
     with tf.name_scope('network_outputs'):
-      c_logits = tf.reshape(ratio_net, [-1, self._ratio_num_atoms])
+      c_logits = tf.reshape(ratio_net, [-1, self._ratio_num_atoms], name='c_logits')
       c_probabilities = tf.contrib.layers.softmax(c_logits)
       c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=1, name='c_values')
 
-      logits = tf.reshape(net, [-1, self.num_actions, self._num_atoms])
+      logits = tf.reshape(net, [-1, self.num_actions, self._num_atoms], name='q_logits')
       probabilities = tf.contrib.layers.softmax(logits)
       q_values = tf.reduce_sum(self._support * probabilities, axis=2, name='q_values')
     return self._get_network_type()(c_values, c_logits, c_probabilities, q_values, logits, probabilities)
@@ -330,7 +336,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tiled_support = tf.reshape(tiled_support, [batch_size, self._ratio_num_atoms])
       # incorporate beginning states, whose tiled support is 1
       beginning_mask = self._replay.uniform_transition['beginning']
-      beginning_mask = tf.identity(beginning_mask, name='beginning_mask')
       tiled_support = tf.where(beginning_mask, tf.ones(tf.shape(tiled_support)), tiled_support, 
                                name='tiled_support')
 
@@ -346,13 +351,13 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       target_ratio = tf.multiply(policies_quotient, tiled_support, name='target_ratio')
 
       # size of target_support: batch_size x ratio_num_atoms
-      target_support = tf.add(self.ratio_discount_factor * target_ratio, constant_term, 
+      self._target_support  = tf.add(self.ratio_discount_factor * target_ratio, constant_term, 
                               name='target_support')
 
       # size of next_probabilities: batch_size x ratio_num_atoms
       probabilities = self._u_replay_target_net_outputs.c_probabilities
 
-    return rainbow_agent.project_distribution(target_support, probabilities, self._ratio_support)
+    return rainbow_agent.project_distribution(self._target_support, probabilities, self._ratio_support)
   
   def _build_train_op(self):
     """Builds a training op.
@@ -387,6 +392,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       # Loss of the ratio model
       with tf.name_scope('c_train_op'):
         c_target_distribution = tf.stop_gradient(self._build_target_c_distribution(), name='c_distribution')
+        self.c_target_distribution = c_target_distribution
 
         c_logits = self._u_replay_next_net_outputs.c_logits
         c_logits = tf.identity(c_logits, name='c_logits')
@@ -428,7 +434,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             mean, var = tf.nn.moments(priorities, axes=[0])
             tf.summary.scalar('MeanPriorities', mean)
             tf.summary.scalar('VarPriorities', var)
-            tf.summary.text('priorities', tf.as_string(priorities))
+            tf.summary.text('Values', tf.as_string(priorities))
           with tf.variable_scope('Masks'):
             tf.summary.scalar('BeginningMask', tf.reduce_sum(tf.cast(beginning_mask, tf.int8)))
             tf.summary.scalar('TerminalMask', tf.reduce_sum(terminal_mask))
@@ -436,7 +442,57 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
             tf.summary.histogram('c_logits', c_logits[0,:])
             tf.summary.histogram('c_probs', self._u_replay_target_net_outputs.c_probabilities[0,:])
+          with tf.variable_scope('Images'):
+            argmax_c_value = tf.argmax(self._u_replay_next_net_outputs.c_values, axis=0)
+            self.compute_c_distribution_summaries(argmax_c_value, prefix_name='ARGMAX_')
+            argmax_frame = self._replay.u_next_states[argmax_c_value:argmax_c_value+1,:,:,3:4]
+            tf.summary.image('ARGMAX_Frame', argmax_frame)
+
+            argmin_c_value = tf.argmin(self._u_replay_next_net_outputs.c_values, axis=0)
+            self.compute_c_distribution_summaries(argmin_c_value, prefix_name='ARGMIN_')
+            argmin_frame = self._replay.u_next_states[argmin_c_value:argmin_c_value+1,:,:,3:4]
+            tf.summary.image('ARGMIN_Frame', argmin_frame)
+            
       # Schaul et al. reports a slightly different rule, where 1/N is also
       # exponentiated by beta. Not doing so seems more reasonable, and did not
       # impact performance in our experiments.
       return self.optimizer.minimize(tf.reduce_mean(final_loss)), final_loss
+
+  def compute_c_distribution_summaries(self, index, prefix_name=''):
+    self.c_distribution_summary(
+      support=self._ratio_support, 
+      dist_values=self._u_replay_next_net_outputs.c_probabilities[index], 
+      name=prefix_name+'Predicted_Dist')
+    
+    self.c_distribution_summary(
+      support=self._target_support[index], 
+      dist_values=self._u_replay_target_net_outputs.c_probabilities[index], 
+      name=prefix_name+'Target_Dist')
+    
+    self.c_distribution_summary(
+      support=self._ratio_support, 
+      dist_values=self.c_target_distribution[index], 
+      name=prefix_name+'Projected_Dist')
+            
+  def c_distribution_summary(self, support, dist_values, name=None):
+    c_value = tf.reduce_sum(support*dist_values, axis=0)
+    width = (tf.reduce_max(support)-tf.reduce_min(support))/float(self._ratio_num_atoms)
+    pred_dist = tf.py_func(
+      self.plot_c_value_distribution, [c_value, support, dist_values, width],
+      [tf.uint8],
+      name=name
+    )
+    tf.summary.image(name, pred_dist)
+
+  def plot_c_value_distribution(self, c_value, support, dist_values, width): 
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.set_title('c: ' + str(c_value))
+    ax.set_xlabel('c value')
+    ax.set_ylabel('probability')
+    ax.bar(support, dist_values, width=width, alpha=0.5, align='edge',linewidth=1, edgecolor='black')
+    fig.canvas.draw()
+    # Now we can save it to a numpy array.
+    dist = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    dist = dist.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close('all')
+    return dist
