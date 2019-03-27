@@ -26,9 +26,9 @@ CovariateShiftAgent.quotient_epsilon = 0.1
 CovariateShiftAgent.use_loss_weights = False
 CovariateShiftAgent.ratio_num_atoms = 51
 CovariateShiftAgent.ratio_cmin = 0
-CovariateShiftAgent.ratio_cmax = 10
+CovariateShiftAgent.ratio_cmax = 100
 CovariateShiftAgent.ratio_discount_factor = 0.99
-CovariateShiftAgent.ratio_loss_weight = 0.002
+CovariateShiftAgent.ratio_loss_weight = 0.0002
 
 tf.train.AdamOptimizer.learning_rate = 0.00025
 tf.train.AdamOptimizer.epsilon = 0.0003125

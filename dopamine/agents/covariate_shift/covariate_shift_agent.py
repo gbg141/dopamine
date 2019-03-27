@@ -1,7 +1,7 @@
 # coding=utf-8
 # gbg141
 
-"""Agent permorming a Distributional Discounted COP-TD
+"""Agent performing a Distributional Discounted COP-TD
 
 Details in "Off-Policy Deep Reinforcement Learning by Bootstrapping the Covariate Shift" by 
 Carles Gelada & Marc G. Bellemare (2018)
@@ -317,7 +317,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     is the support of the previous state distribution:
 
       * Evenly spaced in [vmin, vmax] if the current state is nonbegginer;
-      * 1 otherwise (duplicated ratio_num_atoms times).
+      * 1 otherwise (replicated ratio_num_atoms times).
 
     Second, we compute the cs ratio probabilities of the current state.
 

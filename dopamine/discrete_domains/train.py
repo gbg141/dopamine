@@ -32,6 +32,8 @@ import tensorflow as tf
 
 flags.DEFINE_string('base_dir', None,
                     'Base directory to host all required sub-directories.')
+flags.DEFINE_boolean('debugger', None, 
+                  'Whether to run tensorboard debugger or not')
 flags.DEFINE_multi_string(
     'gin_files', [], 'List of paths to gin configuration files (e.g.'
     '"dopamine/agents/dqn/dqn.gin").')
@@ -52,7 +54,7 @@ def main(unused_argv):
   """
   tf.logging.set_verbosity(tf.logging.INFO)
   run_experiment.load_gin_configs(FLAGS.gin_files, FLAGS.gin_bindings)
-  runner = run_experiment.create_runner(FLAGS.base_dir)
+  runner = run_experiment.create_runner(FLAGS.base_dir, tensorboard_debugger=FLAGS.debugger)
   runner.run_experiment()
 
 

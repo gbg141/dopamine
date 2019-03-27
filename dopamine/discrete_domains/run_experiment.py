@@ -96,7 +96,7 @@ def create_agent(sess, environment, agent_name=None, summary_writer=None,
 
 
 @gin.configurable
-def create_runner(base_dir, schedule='continuous_train_and_eval'):
+def create_runner(base_dir, schedule='continuous_train_and_eval', tensorboard_debugger=False):
   """Creates an experiment Runner.
 
   Args:
@@ -112,7 +112,7 @@ def create_runner(base_dir, schedule='continuous_train_and_eval'):
   assert base_dir is not None
   # Continuously runs training and evaluation until max num_iterations is hit.
   if schedule == 'continuous_train_and_eval':
-    return Runner(base_dir, create_agent)
+    return Runner(base_dir, create_agent, tensorboard_debugger=tensorboard_debugger)
   # Continuously runs training until max num_iterations is hit.
   elif schedule == 'continuous_train':
     return TrainRunner(base_dir, create_agent)
@@ -150,7 +150,8 @@ class Runner(object):
                num_iterations=200,
                training_steps=250000,
                evaluation_steps=125000,
-               max_steps_per_episode=27000):
+               max_steps_per_episode=27000,
+               tensorboard_debugger=False):
     """Initialize the Runner object in charge of running a full experiment.
 
     Args:
@@ -191,7 +192,8 @@ class Runner(object):
     self._environment = create_environment_fn()
     # Set up a session and initialize variables.
     self._sess = tf.Session('', config=tf.ConfigProto(allow_soft_placement=True))
-    #self._sess = tf_debug.TensorBoardDebugWrapperSession(self._sess, "MacBook-Pro-de-Guillermo.local:7000")
+    if tensorboard_debugger:
+      self._sess = tf_debug.TensorBoardDebugWrapperSession(self._sess, "0.0.0.0:7000")
     self._agent = create_agent_fn(self._sess, self._environment,
                                   summary_writer=self._summary_writer)
     self._summary_writer.add_graph(graph=tf.get_default_graph())
