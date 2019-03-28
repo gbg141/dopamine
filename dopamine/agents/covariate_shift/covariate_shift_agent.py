@@ -299,7 +299,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
                                     axis=1, output_type=tf.int32, name='qt_argmax_actions')
       replay_actions = self._replay.actions
-      replay_actions = tf.identity(replay_actions, name='replay_actions')
+      
       coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
 
       coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon), 
