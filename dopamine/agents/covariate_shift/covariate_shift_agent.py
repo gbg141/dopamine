@@ -455,9 +455,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             tf.summary.scalar('MeanPriorities', mean)
             tf.summary.scalar('VarPriorities', var)
             tf.summary.text('Values', tf.as_string(priorities))
-          with tf.variable_scope('Masks'):
-            tf.summary.scalar('BeginningMask', tf.reduce_sum(tf.cast(beginning_mask, tf.int8)))
-            tf.summary.scalar('TerminalMask', tf.reduce_sum(terminal_mask))
           with tf.variable_scope('Histograms'):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
             tf.summary.histogram('c_logits', c_logits[0,:])
