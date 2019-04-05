@@ -24,13 +24,13 @@ CovariateShiftAgent.use_ratio_model = True
 CovariateShiftAgent.use_priorities = True
 CovariateShiftAgent.quotient_epsilon = 0.1
 CovariateShiftAgent.use_loss_weights = False
-CovariateShiftAgent.ratio_num_atoms = 151
+CovariateShiftAgent.ratio_num_atoms = 101
 CovariateShiftAgent.ratio_cmin = 0
-CovariateShiftAgent.ratio_cmax = 100
-CovariateShiftAgent.use_ratio_exp_bins = True
+CovariateShiftAgent.ratio_cmax = 5
+CovariateShiftAgent.use_ratio_exp_bins = False
 CovariateShiftAgent.ratio_exp_base = 2.
 CovariateShiftAgent.ratio_min_exp = None
-CovariateShiftAgent.ratio_max_exp = 8
+CovariateShiftAgent.ratio_max_exp = 6
 CovariateShiftAgent.ratio_discount_factor = 0.99
 CovariateShiftAgent.ratio_loss_weight = 0.0001
 

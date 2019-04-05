@@ -431,8 +431,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
         # Update priorities, being those of beginnings 1
         priorities = self._replay_net_outputs.c_values
-        beginning_mask = self._replay.transition['beginning']
-        priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities, name='priorities')
+        #beginning_mask = self._replay.transition['beginning']
+        #priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities, name='priorities')
         if self.use_priorities:
           update_priorities_op = self._replay.tf_set_priority(
                 self._replay.indices, priorities)
