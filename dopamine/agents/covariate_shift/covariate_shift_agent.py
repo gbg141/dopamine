@@ -143,8 +143,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       self._ratio_support = tf.constant([ratio_exp_base**exp for exp in 
                                          range(self._ratio_min_exp, self._ratio_max_exp+1)])
       self._ratio_num_atoms = self._ratio_max_exp - self._ratio_min_exp + 1
-      self._ratio_cmin = tf.reduce_min(self._ratio_support)
-      self._ratio_cmax = tf.reduce_max(self._ratio_support)
+      self._ratio_cmin = float(self._ratio_exp_base**self._ratio_min_exp)
+      self._ratio_cmax = float(self._ratio_exp_base**self._ratio_max_exp)
     else:
       self._ratio_cmin = float(ratio_cmin) if ratio_cmin is not None else self.quotient_epsilon
       self._ratio_cmax = float(ratio_cmax) if ratio_cmax is not None else float(num_actions)
