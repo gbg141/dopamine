@@ -5,7 +5,7 @@
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export CUDA_VISIBLE_DEVICES=2
 
-base=./logs
+base=./logs/log055
 host=0.0.0.0
 port=6006
 gin_files='dopamine/agents/covariate_shift/configs/covariate_shift.gin'

@@ -62,9 +62,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                use_priorities=True,
                quotient_epsilon=0.1,
                use_loss_weights=False,
-               ratio_num_atoms=51,
-               ratio_cmin=None,
-               ratio_cmax=None,
+               ratio_num_atoms=101,
+               ratio_cmin=0.05,
+               ratio_cmax=5.,
+               log_ratio_approach=False,
                use_ratio_exp_bins=False,
                ratio_exp_base=2.,
                ratio_min_exp=None,
@@ -114,6 +115,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       ratio_num_atoms: int, the number of buckets of the ratio function distribution.
       ratio_cmin: float, the predefined minimum ratio value
       ratio_cmax: float, the predefined maximum ratio value
+      log_ratio_approach: bool, whether to consider the logarithmic update approach
       use_ratio_exp_bins: bool, whether to use an exponential sequence of bins 
         instead of linear ones
       ratio_exp_base: float, base of the exponential sequence
@@ -134,7 +136,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.use_priorities = use_priorities
     self.quotient_epsilon = quotient_epsilon
     self.use_loss_weights = use_loss_weights
-    self.use_ratio_exp_bins = use_ratio_exp_bins
+    self.log_ratio_approach = log_ratio_approach
+    self.use_ratio_exp_bins = use_ratio_exp_bins if not log_ratio_approach else False
     if self.use_ratio_exp_bins:
       self._ratio_exp_base = ratio_exp_base
       self._ratio_max_exp = ratio_max_exp
@@ -146,10 +149,16 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       self._ratio_cmin = float(self._ratio_exp_base**self._ratio_min_exp)
       self._ratio_cmax = float(self._ratio_exp_base**self._ratio_max_exp)
     else:
-      self._ratio_cmin = float(ratio_cmin) if ratio_cmin is not None else self.quotient_epsilon
-      self._ratio_cmax = float(ratio_cmax) if ratio_cmax is not None else float(num_actions)
       self._ratio_num_atoms = ratio_num_atoms
-      self._ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
+      if log_ratio_approach:
+        self._ratio_cmin = float(np.log(ratio_cmin))
+        self._ratio_cmax = float(np.log(ratio_cmax))
+        self._log_ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
+        self._ratio_support = tf.exp(self._log_ratio_support)
+      else:
+        self._ratio_cmin = float(ratio_cmin)
+        self._ratio_cmax = float(ratio_cmax)
+        self._ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
     self.ratio_discount_factor = ratio_discount_factor
     self.ratio_loss_weight = ratio_loss_weight
 
@@ -158,6 +167,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
       tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
       tf.logging.info('\t use_ratio_exp_bins: %s', use_ratio_exp_bins)
+      tf.logging.info('\t log_ratio_approach: %s', log_ratio_approach)
       tf.logging.info('\t ratio_num_atoms: %d', self._ratio_num_atoms)
       tf.logging.info('\t ratio_cmin: %f', self._ratio_cmin)
       tf.logging.info('\t ratio_cmax: %f', self._ratio_cmax)
@@ -330,6 +340,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                                         name='no_coincidence_value')
 
       policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
+    
     return policies_quotient
 
   def _build_target_c_distribution(self):
@@ -338,7 +349,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     First, we compute the support of the target, gamma * (pi/mu) * x + (1-gamma), Where x
     is the support of the previous state distribution:
 
-      * Evenly spaced in [vmin, vmax] if the current state is nonbegginer;
+      * Evenly spaced in [cmin, cmax] if the current state is nonbegginer;
       * 1 otherwise (replicated ratio_num_atoms times).
 
     Second, we compute the cs ratio probabilities of the current state.
@@ -378,6 +389,52 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       probabilities = self._u_replay_target_net_outputs.c_probabilities
 
     return project_distribution(self._target_support, probabilities, self._ratio_support)
+
+  def _build_target_c_distribution_with_log_approach(self):
+    """Builds the c ratio target distribution using the logarithmic approach.
+
+    First, we compute the support of the target, gamma * [log(pi/mu) + yi], Where yi,
+    which represents the logarithm of the ratio values,
+    is the support of the previous state distribution:
+
+      * Evenly spaced in [cmin, cmax] if the current state is nonbegginer;
+      * 0 otherwise (replicated ratio_num_atoms times).
+
+    Second, we compute the cs ratio probabilities of the current state.
+
+    Finally we project the target (support + probabilities) onto the
+    original support.
+
+    Returns:
+      target_distribution: tf.tensor, the target distribution from the replay.
+    """
+    batch_size = self._replay.batch_size
+    with tf.name_scope('c_target_distribution'):
+      # size of tiled_support: batch_size x ratio_num_atoms
+      log_tiled_support = tf.tile(self._log_ratio_support, [batch_size])
+      log_tiled_support = tf.reshape(log_tiled_support, [batch_size, self._ratio_num_atoms])
+      # incorporate beginning states, whose tiled support is 0
+      beginning_mask = self._replay.uniform_transition['beginning']
+      log_tiled_support = tf.where(beginning_mask, tf.zeros(tf.shape(log_tiled_support)), log_tiled_support, 
+                               name='tiled_support')
+
+      # Compute the log quotient of policies
+      policies_quotient = tf.tile(self.compute_policies_quotient(), [1, self._ratio_num_atoms],
+                                  name='quotient')
+      log_policies_quotient = tf.log(policies_quotient, name='log_quotient')
+      
+      # target ratio
+      log_target_ratio = tf.add(log_policies_quotient, log_tiled_support, name='log_target_ratio')
+
+      # size of target_support: batch_size x ratio_num_atoms
+      self._log_target_support  = tf.multiply(self.ratio_discount_factor, log_target_ratio,
+                                              name='log_target_support')
+      self._target_support = tf.exp(self._log_target_support)
+
+      # size of next_probabilities: batch_size x ratio_num_atoms
+      probabilities = self._u_replay_target_net_outputs.c_probabilities
+
+    return project_distribution(self._log_target_support, probabilities, self._log_ratio_support)
   
   def _build_train_op(self):
     """Builds a training op.
@@ -411,11 +468,15 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     if self.use_ratio_model:
       # Loss of the ratio model
       with tf.name_scope('c_train_op'):
-        c_target_distribution = tf.stop_gradient(self._build_target_c_distribution(), name='c_distribution')
+        if self.log_ratio_approach:
+          c_target_distribution = tf.stop_gradient(self._build_target_c_distribution_with_log_approach(), 
+                                                   name='c_distribution')
+        else:
+          c_target_distribution = tf.stop_gradient(self._build_target_c_distribution(), 
+                                                   name='c_distribution')
         self.c_target_distribution = c_target_distribution
 
         c_logits = self._u_replay_next_net_outputs.c_logits
-        c_logits = tf.identity(c_logits, name='c_logits')
 
         c_loss = tf.nn.softmax_cross_entropy_with_logits(
             labels=c_target_distribution,
