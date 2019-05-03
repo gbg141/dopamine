@@ -68,6 +68,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                log_ratio_approach=False,
                perform_log_ratio_mean=False,
                use_ratio_exp_bins=False,
+               define_base_and_exp=False,
                ratio_exp_base=2.,
                ratio_min_exp=None,
                ratio_max_exp=8,
@@ -121,6 +122,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         to compute the mean of the logarithmic bins to compute the c value
       use_ratio_exp_bins: bool, whether to use an exponential sequence of bins 
         instead of linear ones
+      define_base_and_exp: bool, whether the base and exponents are defined; otherwise,
+        the default interval is divided in an exponential way
       ratio_exp_base: float, base of the exponential sequence
       ratio_min_exp: int, minimum exponent
       ratio_max_exp: int, maximum exponent
@@ -142,16 +145,23 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.log_ratio_approach = log_ratio_approach
     self.perform_log_ratio_mean = perform_log_ratio_mean
     self.use_ratio_exp_bins = use_ratio_exp_bins if not log_ratio_approach else False
+    self.define_base_and_exp = define_base_and_exp
     if self.use_ratio_exp_bins:
-      self._ratio_exp_base = ratio_exp_base
-      self._ratio_max_exp = ratio_max_exp
-      self._ratio_min_exp = ratio_min_exp if ratio_min_exp is not None else -ratio_max_exp
-      assert self._ratio_min_exp < 0
-      self._ratio_support = tf.constant([ratio_exp_base**exp for exp in 
-                                         range(self._ratio_min_exp, self._ratio_max_exp+1)])
-      self._ratio_num_atoms = self._ratio_max_exp - self._ratio_min_exp + 1
-      self._ratio_cmin = float(self._ratio_exp_base**self._ratio_min_exp)
-      self._ratio_cmax = float(self._ratio_exp_base**self._ratio_max_exp)
+      if self.define_base_and_exp:
+        self._ratio_exp_base = ratio_exp_base
+        self._ratio_max_exp = ratio_max_exp
+        self._ratio_min_exp = ratio_min_exp if ratio_min_exp is not None else -ratio_max_exp
+        assert self._ratio_min_exp < 0
+        self._ratio_support = tf.constant([ratio_exp_base**exp for exp in 
+                                          range(self._ratio_min_exp, self._ratio_max_exp+1)])
+        self._ratio_num_atoms = self._ratio_max_exp - self._ratio_min_exp + 1
+        self._ratio_cmin = float(self._ratio_exp_base**self._ratio_min_exp)
+        self._ratio_cmax = float(self._ratio_exp_base**self._ratio_max_exp)
+      else:
+        self._ratio_num_atoms = ratio_num_atoms
+        self._ratio_cmin = float(ratio_cmin)
+        self._ratio_cmax = float(ratio_cmax)
+        self._ratio_support = tf.exp(tf.linspace(np.log(self._ratio_cmin), np.log(self._ratio_cmax), ratio_num_atoms))
     else:
       self._ratio_num_atoms = ratio_num_atoms
       if log_ratio_approach:
@@ -170,7 +180,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
       tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
       tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
-      tf.logging.info('\t use_ratio_exp_bins: %s', use_ratio_exp_bins)
+      tf.logging.info('\t use_ratio_exp_bins: %s', self.use_ratio_exp_bins)
+      if self.use_ratio_exp_bins:
+        tf.logging.info('\t define_base_and_exp: %s', define_base_and_exp)
       tf.logging.info('\t log_ratio_approach: %s', log_ratio_approach)
       if self.log_ratio_approach:
         tf.logging.info('\t perform_log_ratio_mean: %s', perform_log_ratio_mean)
