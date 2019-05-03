@@ -28,6 +28,7 @@ CovariateShiftAgent.ratio_num_atoms = 101
 CovariateShiftAgent.ratio_cmin = 0.05
 CovariateShiftAgent.ratio_cmax = 5
 CovariateShiftAgent.log_ratio_approach = True
+CovariateShiftAgent.perform_log_ratio_mean = True
 CovariateShiftAgent.use_ratio_exp_bins = False
 CovariateShiftAgent.ratio_exp_base = 2.
 CovariateShiftAgent.ratio_min_exp = None
