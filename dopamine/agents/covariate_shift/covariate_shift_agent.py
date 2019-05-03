@@ -161,7 +161,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         self._ratio_num_atoms = ratio_num_atoms
         self._ratio_cmin = float(ratio_cmin)
         self._ratio_cmax = float(ratio_cmax)
-        self._ratio_support = tf.exp(tf.linspace(np.log(self._ratio_cmin), np.log(self._ratio_cmax), ratio_num_atoms))
+        self._ratio_support = tf.exp(tf.linspace(float(np.log(self._ratio_cmin)), 
+                                                 float(np.log(self._ratio_cmax)), 
+                                                 ratio_num_atoms))
     else:
       self._ratio_num_atoms = ratio_num_atoms
       if log_ratio_approach:
