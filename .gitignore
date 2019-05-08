@@ -4,12 +4,9 @@
 .vscode/
 .ipynb_checkpoints/
 notebooks/
-<<<<<<< HEAD
 logs*/
 Papers/
 Experiments/
-=======
->>>>>>> ab9a30137d10736b60f63a26e2e6ac77a9cfabc1
 
 # Compiled source #
 ###################
