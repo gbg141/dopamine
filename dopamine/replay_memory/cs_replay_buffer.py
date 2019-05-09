@@ -58,7 +58,7 @@ class WrappedCSReplayBuffer(
                batch_size=32,
                update_horizon=1,
                gamma=0.99,
-               max_sample_attempts=circular_replay_buffer.MAX_SAMPLE_ATTEMPTS,
+               max_sample_attempts=1000,
                extra_storage_types=None,
                observation_dtype=np.uint8,
                action_shape=(),
