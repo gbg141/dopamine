@@ -22,6 +22,7 @@ from dopamine.agents.dqn import dqn_agent
 from dopamine.agents.rainbow import rainbow_agent
 from dopamine.replay_memory import prioritized_replay_buffer, cs_replay_buffer
 from dopamine.replay_memory.circular_replay_buffer import ReplayElement
+#from dopamine.discrete_domains import atari_lib
 import numpy as np
 import tensorflow as tf
 
@@ -40,6 +41,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                observation_shape=dqn_agent.NATURE_DQN_OBSERVATION_SHAPE,
                observation_dtype=dqn_agent.NATURE_DQN_DTYPE,
                stack_size=dqn_agent.NATURE_DQN_STACK_SIZE,
+               network=None,
                num_atoms=51,
                vmax=10.,
                gamma=0.99,
@@ -84,6 +86,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       observation_dtype: tf.DType, specifies the type of the observations. Note
         that if your inputs are continuous, you should set this to tf.float32.
       stack_size: int, number of frames to use in state stack.
+      network: function expecting three parameters:
+        (num_actions, network_type, state). This function will return the
+        network_type object containing the tensors output by the network.
+        See dopamine.discrete_domains.atari_lib.nature_dqn_network as
+        an example. (UNUSED HERE)
       num_atoms: int, the number of buckets of the value function distribution.
       vmax: float, the value distribution support is [-vmax, vmax].
       gamma: float, discount factor with the usual RL meaning.
@@ -152,8 +159,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         self._ratio_max_exp = ratio_max_exp
         self._ratio_min_exp = ratio_min_exp if ratio_min_exp is not None else -ratio_max_exp
         assert self._ratio_min_exp < 0
-        self._ratio_support = tf.constant([ratio_exp_base**exp for exp in 
+        self._ratio_support = tf.constant([float(ratio_exp_base**exp) for exp in 
                                           range(self._ratio_min_exp, self._ratio_max_exp+1)])
+        self._log_ratio_support = tf.log(self._ratio_support) / tf.log(float(ratio_exp_base))
         self._ratio_num_atoms = self._ratio_max_exp - self._ratio_min_exp + 1
         self._ratio_cmin = float(self._ratio_exp_base**self._ratio_min_exp)
         self._ratio_cmax = float(self._ratio_exp_base**self._ratio_max_exp)
@@ -161,9 +169,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         self._ratio_num_atoms = ratio_num_atoms
         self._ratio_cmin = float(ratio_cmin)
         self._ratio_cmax = float(ratio_cmax)
-        self._ratio_support = tf.exp(tf.linspace(float(np.log(self._ratio_cmin)), 
-                                                 float(np.log(self._ratio_cmax)), 
-                                                 ratio_num_atoms))
+        self._log_ratio_support = tf.linspace(float(np.log(self._ratio_cmin)), 
+                                              float(np.log(self._ratio_cmax)), 
+                                              ratio_num_atoms)
+        self._ratio_support = tf.exp(self._log_ratio_support)
     else:
       self._ratio_num_atoms = ratio_num_atoms
       if log_ratio_approach:
@@ -175,6 +184,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         self._ratio_cmin = float(ratio_cmin)
         self._ratio_cmax = float(ratio_cmax)
         self._ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
+        self._log_ratio_support = tf.log(self._ratio_support)
     self.ratio_discount_factor = ratio_discount_factor
     self.ratio_loss_weight = ratio_loss_weight
 
@@ -200,6 +210,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           observation_shape=observation_shape,
           observation_dtype=observation_dtype,
           stack_size=stack_size,
+          network=network,
           gamma=gamma,
           update_horizon=update_horizon,
           min_replay_history=min_replay_history,
@@ -259,6 +270,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
   def _network_template(self, state):
     """Builds a convolutional network that outputs CS ratio and Q-value distributions.
+
+    TODO: Move this code to atari_lib and use 'network' parameter
 
     Args:
       state: `tf.Tensor`, contains the agent's current state.
