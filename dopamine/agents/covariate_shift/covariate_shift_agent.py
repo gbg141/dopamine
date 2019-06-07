@@ -68,8 +68,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                ratio_cmin=0.05,
                ratio_cmax=5.,
                log_ratio_approach=False,
-               perform_log_ratio_mean=False,
                use_ratio_exp_bins=False,
+               plot_log_scale=False,
                define_base_and_exp=False,
                ratio_exp_base=2.,
                ratio_min_exp=None,
@@ -125,10 +125,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       ratio_cmin: float, the predefined minimum ratio value
       ratio_cmax: float, the predefined maximum ratio value
       log_ratio_approach: bool, whether to consider the logarithmic update approach
-      perform_log_ratio_mean: bool, when considering the logarithmic approach, whether 
-        to compute the mean of the logarithmic bins to compute the c value
       use_ratio_exp_bins: bool, whether to use an exponential sequence of bins 
         instead of linear ones
+      plot_log_scale: bool, whether to show x-axis distribution plot in log scale when
+        using exponential bins
       define_base_and_exp: bool, whether the base and exponents are defined; otherwise,
         the default interval is divided in an exponential way
       ratio_exp_base: float, base of the exponential sequence
@@ -150,10 +150,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.quotient_epsilon = quotient_epsilon
     self.use_loss_weights = use_loss_weights
     self.log_ratio_approach = log_ratio_approach
-    self.perform_log_ratio_mean = perform_log_ratio_mean
-    self.use_ratio_exp_bins = use_ratio_exp_bins if not log_ratio_approach else False
+    self.use_ratio_exp_bins = use_ratio_exp_bins
+    self.plot_log_scale = plot_log_scale
     self.define_base_and_exp = define_base_and_exp
-    if self.use_ratio_exp_bins:
+    if self.use_ratio_exp_bins and not self.log_ratio_approach:
       if self.define_base_and_exp:
         self._ratio_exp_base = ratio_exp_base
         self._ratio_max_exp = ratio_max_exp
@@ -175,11 +175,15 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         self._ratio_support = tf.exp(self._log_ratio_support)
     else:
       self._ratio_num_atoms = ratio_num_atoms
-      if log_ratio_approach:
+      if self.log_ratio_approach:
         self._ratio_cmin = float(np.log(ratio_cmin))
         self._ratio_cmax = float(np.log(ratio_cmax))
-        self._log_ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
-        self._ratio_support = tf.exp(self._log_ratio_support)
+        if self.use_ratio_exp_bins:
+          self._log_ratio_support = tf.linspace(self._ratio_cmin, self._ratio_cmax, ratio_num_atoms)
+          self._ratio_support = tf.exp(self._log_ratio_support)
+        else:
+          self._ratio_support = tf.linspace(float(ratio_cmin), float(ratio_cmax), ratio_num_atoms)
+          self._log_ratio_support = tf.log(self._ratio_support)
       else:
         self._ratio_cmin = float(ratio_cmin)
         self._ratio_cmax = float(ratio_cmax)
@@ -192,12 +196,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
       tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
       tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
-      tf.logging.info('\t use_ratio_exp_bins: %s', self.use_ratio_exp_bins)
-      if self.use_ratio_exp_bins:
-        tf.logging.info('\t define_base_and_exp: %s', define_base_and_exp)
       tf.logging.info('\t log_ratio_approach: %s', log_ratio_approach)
-      if self.log_ratio_approach:
-        tf.logging.info('\t perform_log_ratio_mean: %s', perform_log_ratio_mean)
+      tf.logging.info('\t use_ratio_exp_bins: %s', self.use_ratio_exp_bins)
+      if self.use_ratio_exp_bins and not log_ratio_approach:
+        tf.logging.info('\t define_base_and_exp: %s', define_base_and_exp)
       tf.logging.info('\t ratio_num_atoms: %d', self._ratio_num_atoms)
       tf.logging.info('\t ratio_cmin: %f', self._ratio_cmin)
       tf.logging.info('\t ratio_cmax: %f', self._ratio_cmax)
@@ -311,11 +313,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     with tf.name_scope('network_outputs'):
       c_logits = tf.reshape(ratio_net, [-1, self._ratio_num_atoms], name='c_logits')
       c_probabilities = tf.contrib.layers.softmax(c_logits)
-      if self.log_ratio_approach and self.perform_log_ratio_mean:
-        log_c_values = tf.reduce_sum(self._log_ratio_support * c_probabilities, axis=1, name='log_c_values')
-        c_values = tf.exp(log_c_values, name='c_values')
-      else:
-        c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=1, name='c_values')
+      c_values = tf.reduce_sum(self._ratio_support * c_probabilities, axis=1, name='c_values')
 
       logits = tf.reshape(net, [-1, self.num_actions, self._num_atoms], name='q_logits')
       probabilities = tf.contrib.layers.softmax(logits)
@@ -574,14 +572,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       return self.optimizer.minimize(tf.reduce_mean(final_loss)), final_loss
 
   def compute_c_distribution_summaries(self, index, prefix_name=''):
-    if self.log_ratio_approach and self.perform_log_ratio_mean:
-      predicted_dist_support = self._log_ratio_support 
-      target_dist_support = self._log_target_support[index]
-      projected_dist_support = self._log_ratio_support
-    else:
-      predicted_dist_support = self._ratio_support 
-      target_dist_support = self._target_support[index]
-      projected_dist_support = self._ratio_support 
+    predicted_dist_support = self._ratio_support 
+    target_dist_support = self._target_support[index]
+    projected_dist_support = self._ratio_support 
 
     self.c_distribution_summary(
       support=predicted_dist_support, 
@@ -599,20 +592,24 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       name=prefix_name+'Projected_Dist')
             
   def c_distribution_summary(self, support, dist_values, name=None):
-    if self.log_ratio_approach and self.perform_log_ratio_mean:
-      c_value = tf.exp(tf.reduce_sum(support*dist_values, axis=0))
-    else:
-      c_value = tf.reduce_sum(support*dist_values, axis=0)
-    width = (tf.reduce_max(support)-tf.reduce_min(support))/float(self._ratio_num_atoms)
+    c_value = tf.reduce_sum(support*dist_values, axis=0)
     pred_dist = tf.py_func(
-      self.plot_c_value_distribution, [c_value, support, dist_values, width],
+      self.plot_c_value_distribution, [c_value, support, dist_values, self.use_ratio_exp_bins, self.plot_log_scale],
       [tf.uint8],
       name=name
     )
     tf.summary.image(name, pred_dist)
 
-  def plot_c_value_distribution(self, c_value, support, dist_values, width): 
+  def plot_c_value_distribution(self, c_value, support, dist_values, use_exp_bins=False, log_scale=True): 
+    num_atoms = support.shape[0]
     fig, ax = plt.subplots(figsize=(5, 3))
+    if use_exp_bins:
+      base = (support[-1]/support[0])**(1./num_atoms)
+      extra_mark = support[0]*(base)**(num_atoms+1)
+      if log_scale: ax.set_xscale('log')
+    else:
+      extra_mark = support[-1] + (support[-1]-support[0])/num_atoms
+    width = np.diff(np.hstack((support, np.array((extra_mark)))))
     ax.set_title('c: ' + str(c_value))
     ax.set_xlabel('c value')
     ax.set_ylabel('probability')
