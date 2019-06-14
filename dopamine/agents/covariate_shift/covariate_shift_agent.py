@@ -548,8 +548,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         if self.use_ratio_model:
           with tf.variable_scope('Priorities'):
             mean, var = tf.nn.moments(priorities, axes=[0])
+            max_priority = tf.reduce_max(priorities)
+            min_priority = tf.reduce_min(priorities)
             tf.summary.scalar('MeanPriorities', mean)
             tf.summary.scalar('VarPriorities', var)
+            tf.summary.scalar('MaxPriorities', max_priority)
+            tf.summary.scalar('MinPriorities', min_priority)
             tf.summary.text('Values', tf.as_string(priorities))
           with tf.variable_scope('Histograms'):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
