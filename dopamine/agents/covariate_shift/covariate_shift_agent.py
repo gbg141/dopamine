@@ -63,6 +63,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                use_ratio_model=True,
                use_priorities=True,
                quotient_epsilon=0.1,
+               quotient_epsilon_decay_period=1000000,
                use_loss_weights=False,
                ratio_num_atoms=101,
                ratio_cmin=0.05,
@@ -148,6 +149,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.use_ratio_model = use_ratio_model
     self.use_priorities = use_priorities
     self.quotient_epsilon = quotient_epsilon
+    self.quotient_epsilon_decay_period = quotient_epsilon_decay_period
     self.use_loss_weights = use_loss_weights
     self.log_ratio_approach = log_ratio_approach
     self.use_ratio_exp_bins = use_ratio_exp_bins
@@ -195,6 +197,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     if self.use_ratio_model:
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
       tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
+      tf.logging.info('\t quotient_epsilon_decay_period: %d', quotient_epsilon_decay_period)
       tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
       tf.logging.info('\t log_ratio_approach: %s', log_ratio_approach)
       tf.logging.info('\t use_ratio_exp_bins: %s', self.use_ratio_exp_bins)
@@ -361,7 +364,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       policies_quotient: tf.tensor, the quotient from the replay
     '''
     batch_size = self._replay.batch_size
-
+    epsilon = float(self.epsilon_fn(
+                self.quotient_epsilon_decay_period,
+                self.training_steps,
+                self.min_replay_history,
+                self.quotient_epsilon))
+    
     with tf.name_scope('policies_quotient'):
       qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
                                     axis=1, output_type=tf.int32, name='qt_argmax_actions')
@@ -369,9 +377,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       
       coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
 
-      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon), 
+      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - epsilon) + epsilon, 
                                      name='coincidence_value')
-      no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon,
+      no_coincidence_quotient = tf.fill([batch_size,1], epsilon,
                                         name='no_coincidence_value')
 
       policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
