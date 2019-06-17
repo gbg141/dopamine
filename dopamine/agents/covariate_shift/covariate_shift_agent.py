@@ -121,6 +121,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       use_ratio_model: bool, whether to train the ratio model or not,
       use_priorities: bool, whether to use priorities from the ratio model
       quotient_epsilon: float, epsilon used when computing the quotient of policies
+      quotient_epsilon_decay_period: int, length of the quotient epsilon decay schedule.
       use_loss_weights: bool, whether to use loss weights of the Q model
       ratio_num_atoms: int, the number of buckets of the ratio function distribution.
       ratio_cmin: float, the predefined minimum ratio value
