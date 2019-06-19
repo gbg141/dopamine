@@ -154,7 +154,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.update_beginning_priorities = update_beginning_priorities
     self.final_quotient_epsilon = quotient_epsilon
     self.quotient_epsilon_decay_period = quotient_epsilon_decay_period
-    self.quotient_epsilon = tf.placeholder(tf.float32, name='quotient_epsilon_eff')
+    self.quotient_epsilon = tf.placeholder(tf.float32, name='quotient_epsilon')
     self.use_loss_weights = use_loss_weights
     self.log_ratio_approach = log_ratio_approach
     self.use_ratio_exp_bins = use_ratio_exp_bins
@@ -382,7 +382,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
-        self._sess.run(self._train_op, feed_dict={self.quotient_epsilon: quotient_epsilon})
+        self._sess.run(self._train_op, feed_dict={self.quotient_epsilon: float(quotient_epsilon)})
         if (self.summary_writer is not None and
             self.training_steps > 0 and
             self.training_steps % self.summary_writing_frequency == 0):
