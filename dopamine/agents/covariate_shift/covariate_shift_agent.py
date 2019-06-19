@@ -382,11 +382,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
-        self._sess.run(self._train_op, feed_dict={self.quotient_epsilon: float(quotient_epsilon)})
+        self._sess.run(self._train_op, feed_dict={self.quotient_epsilon: quotient_epsilon})
         if (self.summary_writer is not None and
             self.training_steps > 0 and
             self.training_steps % self.summary_writing_frequency == 0):
-          summary = self._sess.run(self._merged_summaries)
+          summary = self._sess.run(self._merged_summaries, feed_dict={self.quotient_epsilon: quotient_epsilon})
           self.summary_writer.add_summary(summary, self.training_steps)
 
       if self.training_steps % self.target_update_period == 0:
