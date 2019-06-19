@@ -22,6 +22,7 @@ CovariateShiftAgent.summary_writer = True
 CovariateShiftAgent.summary_writing_frequency = 10000
 CovariateShiftAgent.use_ratio_model = True
 CovariateShiftAgent.use_priorities = True
+CovariateShiftAgent.update_beginning_priorities = False
 CovariateShiftAgent.quotient_epsilon = 0.1
 CovariateShiftAgent.quotient_epsilon_decay_period = 1000000
 CovariateShiftAgent.use_loss_weights = False

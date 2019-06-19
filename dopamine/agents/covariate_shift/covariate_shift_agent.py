@@ -62,6 +62,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                summary_writing_frequency=500,
                use_ratio_model=True,
                use_priorities=True,
+               update_beginning_priorities=True,
                quotient_epsilon=0.1,
                quotient_epsilon_decay_period=1000000,
                use_loss_weights=False,
@@ -120,6 +121,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         written. Lower values will result in slower training.
       use_ratio_model: bool, whether to train the ratio model or not,
       use_priorities: bool, whether to use priorities from the ratio model
+      update_beginning_priorities: bool, whether to set beginning states to c=1
       quotient_epsilon: float, epsilon used when computing the quotient of policies
       quotient_epsilon_decay_period: int, length of the quotient epsilon decay schedule.
       use_loss_weights: bool, whether to use loss weights of the Q model
@@ -149,8 +151,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     # Initializing extra parameters
     self.use_ratio_model = use_ratio_model
     self.use_priorities = use_priorities
-    self.quotient_epsilon = quotient_epsilon
+    self.update_beginning_priorities = update_beginning_priorities
+    self.final_quotient_epsilon = quotient_epsilon
     self.quotient_epsilon_decay_period = quotient_epsilon_decay_period
+    self.quotient_epsilon = tf.placeholder(tf.float32, name='quotient_epsilon_eff')
     self.use_loss_weights = use_loss_weights
     self.log_ratio_approach = log_ratio_approach
     self.use_ratio_exp_bins = use_ratio_exp_bins
@@ -197,7 +201,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     if self.use_ratio_model:
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
-      tf.logging.info('\t quotient_epsilon: %f', quotient_epsilon)
+      tf.logging.info('\t final_quotient_epsilon: %f', quotient_epsilon)
       tf.logging.info('\t quotient_epsilon_decay_period: %d', quotient_epsilon_decay_period)
       tf.logging.info('\t use_loss_weights: %s', use_loss_weights)
       tf.logging.info('\t log_ratio_approach: %s', log_ratio_approach)
@@ -358,6 +362,38 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         gamma=self.gamma,
         extra_storage_types=[ReplayElement('beginning', (), np.bool)])
 
+  def _train_step(self):
+    """Runs a single training step.
+
+    Runs a training op if both:
+      (1) A minimum number of frames have been added to the replay buffer.
+      (2) `training_steps` is a multiple of `update_period`.
+
+    Also, syncs weights from online to target network if training steps is a
+    multiple of target update period.
+    """
+    # Run a train op at the rate of self.update_period if enough training steps
+    # have been run. This matches the Nature DQN behaviour.
+    quotient_epsilon = self.epsilon_fn(
+                        self.quotient_epsilon_decay_period,
+                        self.training_steps,
+                        self.min_replay_history,
+                        self.final_quotient_epsilon)
+
+    if self._replay.memory.add_count > self.min_replay_history:
+      if self.training_steps % self.update_period == 0:
+        self._sess.run(self._train_op, feed_dict={self.quotient_epsilon: quotient_epsilon})
+        if (self.summary_writer is not None and
+            self.training_steps > 0 and
+            self.training_steps % self.summary_writing_frequency == 0):
+          summary = self._sess.run(self._merged_summaries)
+          self.summary_writer.add_summary(summary, self.training_steps)
+
+      if self.training_steps % self.target_update_period == 0:
+        self._sess.run(self._sync_qt_ops)
+
+    self.training_steps += 1
+
   def compute_policies_quotient(self):
     '''Computes the quotient of policies that appears at the DCOP update
 
@@ -365,11 +401,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       policies_quotient: tf.tensor, the quotient from the replay
     '''
     batch_size = self._replay.batch_size
-    epsilon = float(self.epsilon_fn(
-                self.quotient_epsilon_decay_period,
-                self.training_steps,
-                self.min_replay_history,
-                self.quotient_epsilon))
     
     with tf.name_scope('policies_quotient'):
       qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
@@ -378,10 +409,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       
       coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
 
-      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - epsilon) + epsilon, 
-                                     name='coincidence_value')
-      no_coincidence_quotient = tf.fill([batch_size,1], epsilon,
-                                        name='no_coincidence_value')
+      #with tf.control_dependencies([initialize_epsilon]):
+      coincidence_quotient = tf.fill([batch_size,1], self.num_actions * (1 - self.quotient_epsilon ) 
+                                      + self.quotient_epsilon, 
+                                      name='coincidence_value')
+      no_coincidence_quotient = tf.fill([batch_size,1], self.quotient_epsilon,
+                                          name='no_coincidence_value')
 
       policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
     
@@ -473,7 +506,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       # size of target_support: batch_size x ratio_num_atoms
       self._log_target_support  = tf.multiply(self.ratio_discount_factor, log_target_ratio,
                                               name='log_target_support')
-      self._target_support = tf.exp(self._log_target_support)
+      self._target_support = tf.exp(self._log_target_support, name='target_support')
 
       # size of next_probabilities: batch_size x ratio_num_atoms
       probabilities = self._u_replay_target_net_outputs.c_probabilities
@@ -536,8 +569,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
         # Update priorities, being those of beginnings 1
         priorities = self._replay_net_outputs.c_values
-        #beginning_mask = self._replay.transition['beginning']
-        #priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities, name='priorities')
+        if self.update_beginning_priorities:
+          beginning_mask = self._replay.transition['beginning']
+          priorities = tf.where(beginning_mask, tf.ones(tf.shape(priorities)), priorities, name='priorities')
+        
         if self.use_priorities:
           update_priorities_op = self._replay.tf_set_priority(
                 self._replay.indices, priorities)
