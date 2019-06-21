@@ -25,6 +25,8 @@ from dopamine.replay_memory.circular_replay_buffer import ReplayElement
 #from dopamine.discrete_domains import atari_lib
 import numpy as np
 import tensorflow as tf
+from tensorflow.python import pywrap_tensorflow
+import os
 
 import gin.tf
 
@@ -56,6 +58,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                replay_scheme='uniform',
                tf_device='/cpu:*',
                use_staging=True,
+               max_tf_checkpoints_to_keep=4,
                optimizer=tf.train.AdamOptimizer(
                    learning_rate=0.00025, epsilon=0.0003125),
                summary_writer=None,
@@ -77,7 +80,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                ratio_min_exp=None,
                ratio_max_exp=8,
                ratio_discount_factor=0.99,
-               ratio_loss_weight=0.02):
+               ratio_loss_weight=0.02,
+               freeze_replay_memory=True,
+               only_use_ratio_model=True):
     """Initializes the agent and constructs the components of its graph.
 
     Args:
@@ -114,6 +119,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tf_device: str, Tensorflow device on which the agent's graph is executed.
       use_staging: bool, when True use a staging area to prefetch the next
         training batch, speeding training up by about 30%.
+      max_tf_checkpoints_to_keep: int, the number of TensorFlow checkpoints to
+        keep.
       optimizer: `tf.train.Optimizer`, for training the value function.
       summary_writer: SummaryWriter object for outputting training statistics.
         Summary writing disabled if set to None.
@@ -198,6 +205,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         self._log_ratio_support = tf.log(self._ratio_support)
     self.ratio_discount_factor = ratio_discount_factor
     self.ratio_loss_weight = ratio_loss_weight
+    self.freeze_replay_memory = freeze_replay_memory
+    self.only_use_ratio_model = only_use_ratio_model
+    self.use_fixed_network = True if freeze_replay_memory and only_use_ratio_model else False
 
     if self.use_ratio_model:
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
@@ -235,6 +245,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           optimizer=self.optimizer,
           summary_writer=summary_writer,
           summary_writing_frequency=summary_writing_frequency)
+    self.max_tf_checkpoints_to_keep = max_tf_checkpoints_to_keep
+    self._fixed_net_sync_op = self._build_fixed_net_sync_op()
+
 
   def begin_episode(self, observation):
     """Returns the agent's first action for this episode. 
@@ -261,11 +274,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       reward: float, the reward.
       is_terminal: bool, indicating if the current state is a terminal state.
     """
-    is_beginning = is_beginning if is_beginning else self.is_beginning
-    if priority is None:
-      priority = self._replay.memory.sum_tree.max_recorded_priority
-    
-    self._replay.add(last_observation, action, reward, is_terminal, is_beginning, priority)
+    if not self.freeze_replay_memory:
+      is_beginning = is_beginning if is_beginning else self.is_beginning
+      if priority is None:
+        priority = self._replay.memory.sum_tree.max_recorded_priority
+      
+      self._replay.add(last_observation, action, reward, is_terminal, is_beginning, priority)
     self.is_beginning = False
 
   def _get_network_type(self):
@@ -335,11 +349,17 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       self._replay_target_net_outputs: The replayed states' target
         values.
     """
+
     super(CovariateShiftAgent, self)._build_networks()
 
     with tf.name_scope('u_replay'):
       self._u_replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
       self._u_replay_target_net_outputs = self.target_convnet(self._replay.u_states)
+    
+    if self.use_fixed_network:
+      self.fixed_convnet = tf.make_template('Fixed', self._network_template)
+      self._u_replay_next_fixed_net_outputs = self.fixed_convnet(self._replay.u_next_states)
+      self._u_replay_fixed_net_outputs = self.fixed_convnet(self._replay.u_states)
 
   def _build_replay_buffer(self, use_staging):
     """Creates the replay buffer used by the agent.
@@ -394,6 +414,56 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     self.training_steps += 1
 
+
+  def _build_fixed_net_sync_op(self):
+    """Builds ops for assigning weights from online to target network.
+
+    Returns:
+      ops: A list of ops assigning weights from online to target network.
+    """
+    # Get trainable variables from online and target DQNs
+    sync_qt_ops = []
+    trainables_online = tf.get_collection(
+        tf.GraphKeys.TRAINABLE_VARIABLES, scope='Online')
+    trainables_target = tf.get_collection(
+        tf.GraphKeys.TRAINABLE_VARIABLES, scope='Fixed')
+    for (w_online, w_target) in zip(trainables_online, trainables_target):
+      # Assign weights from online to target network.
+      sync_qt_ops.append(w_target.assign(w_online, use_locking=True))
+    return sync_qt_ops
+
+  def unbundle(self, checkpoint_dir, iteration_number, bundle_dictionary):
+    final_checkpoint_dir = os.path.join(checkpoint_dir,'tf_ckpt-{}'.format(iteration_number))
+    reader = pywrap_tensorflow.NewCheckpointReader(final_checkpoint_dir)
+    checkpoint_name_var_list = [key for key in reader.get_variable_to_shape_map().keys()]
+    checkpoint_var_list = [var for var in tf.global_variables() if var.name[:-2] in checkpoint_name_var_list]
+    print(checkpoint_var_list)
+    self._saver = tf.train.Saver(var_list=checkpoint_var_list, max_to_keep=self.max_tf_checkpoints_to_keep)
+
+    tf.logging.info('Trying to reload checkpoint %d', iteration_number)
+    unbundle = super(CovariateShiftAgent, self).unbundle(checkpoint_dir, iteration_number, bundle_dictionary)
+    if unbundle: 
+      self._sess.run(self._fixed_net_sync_op)
+      return True
+    else:
+      return False
+
+  def bundle_and_checkpoint(self, checkpoint_dir, iteration_number):
+    if not tf.gfile.Exists(checkpoint_dir):
+      return None
+    # Call the Tensorflow saver to checkpoint the graph.
+    self._saver.save(
+        self._sess,
+        os.path.join(checkpoint_dir, 'tf_ckpt'),
+        global_step=iteration_number)
+    # Checkpoint the out-of-graph replay buffer.
+    if not self.freeze_replay_memory:
+      self._replay.save(checkpoint_dir, iteration_number)
+    bundle_dictionary = {}
+    bundle_dictionary['state'] = self.state
+    bundle_dictionary['training_steps'] = self.training_steps
+    return bundle_dictionary
+  
   def compute_policies_quotient(self):
     '''Computes the quotient of policies that appears at the DCOP update
 
@@ -403,7 +473,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     batch_size = self._replay.batch_size
     
     with tf.name_scope('policies_quotient'):
-      qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
+      if self.use_fixed_network:
+        qt_argmax_actions = tf.argmax(self._u_replay_fixed_net_outputs.q_values, 
+                                    axis=1, output_type=tf.int32, name='qt_argmax_actions')
+      else:
+        qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
                                     axis=1, output_type=tf.int32, name='qt_argmax_actions')
       replay_actions = self._replay.actions
       
@@ -520,27 +594,28 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       train_op: An op performing one step of training from replay data.
     """
 
-    # Loss os the Q model
-    target_distribution = tf.stop_gradient(self._build_target_distribution())
+    if not self.only_use_ratio_model:
+      # Loss os the Q model
+      target_distribution = tf.stop_gradient(self._build_target_distribution())
 
-    # size of indices: batch_size x 1.
-    indices = tf.range(tf.shape(self._replay_net_outputs.logits)[0])[:, None]
-    # size of reshaped_actions: batch_size x 2.
-    reshaped_actions = tf.concat([indices, self._replay.actions[:, None]], 1)
-    # For each element of the batch, fetch the logits for its selected action.
-    chosen_action_logits = tf.gather_nd(self._replay_net_outputs.logits,
-                                        reshaped_actions)
+      # size of indices: batch_size x 1.
+      indices = tf.range(tf.shape(self._replay_net_outputs.logits)[0])[:, None]
+      # size of reshaped_actions: batch_size x 2.
+      reshaped_actions = tf.concat([indices, self._replay.actions[:, None]], 1)
+      # For each element of the batch, fetch the logits for its selected action.
+      chosen_action_logits = tf.gather_nd(self._replay_net_outputs.logits,
+                                          reshaped_actions)
 
-    loss = tf.nn.softmax_cross_entropy_with_logits(
-        labels=target_distribution,
-        logits=chosen_action_logits)
+      loss = tf.nn.softmax_cross_entropy_with_logits(
+          labels=target_distribution,
+          logits=chosen_action_logits)
 
-    if self.use_loss_weights:
-      # Weight the loss by the inverse priorities.
-      probs = self._replay.transition['sampling_probabilities']
-      loss_weights = 1.0 / tf.sqrt(probs + 1e-10)
-      loss_weights /= tf.reduce_max(loss_weights)
-      loss = loss_weights * loss
+      if self.use_loss_weights:
+        # Weight the loss by the inverse priorities.
+        probs = self._replay.transition['sampling_probabilities']
+        loss_weights = 1.0 / tf.sqrt(probs + 1e-10)
+        loss_weights /= tf.reduce_max(loss_weights)
+        loss = loss_weights * loss
 
     if self.use_ratio_model:
       # Loss of the ratio model
@@ -565,7 +640,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         c_loss = terminal_mask * c_loss
 
         # Generate the final loss
-        final_loss = tf.add(loss, self.ratio_loss_weight * c_loss, name='final_loss')
+        if self.only_use_ratio_model:
+          final_loss = c_loss
+        else:
+          tf.add(loss, self.ratio_loss_weight * c_loss, name='final_loss')
 
         # Update priorities, being those of beginnings 1
         priorities = self._replay_net_outputs.c_values
@@ -588,6 +666,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(final_loss))
           if self.use_ratio_model:
             tf.summary.scalar('MeanRatioLoss', tf.reduce_mean(c_loss))
+          if not self.only_use_ratio_model:
             tf.summary.scalar('MeanQLoss', tf.reduce_mean(loss))
         if self.use_ratio_model:
           with tf.variable_scope('Priorities'):
