@@ -82,7 +82,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                ratio_discount_factor=0.99,
                ratio_loss_weight=0.02,
                freeze_replay_memory=True,
-               only_use_ratio_model=True):
+               only_use_ratio_model=True,
+               target_greedy_policy=False):
     """Initializes the agent and constructs the components of its graph.
 
     Args:
@@ -208,6 +209,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.freeze_replay_memory = freeze_replay_memory
     self.only_use_ratio_model = only_use_ratio_model
     self.use_fixed_network = True if freeze_replay_memory and only_use_ratio_model else False
+    self.target_greedy_policy = target_greedy_policy
 
     if self.use_ratio_model:
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
@@ -475,12 +477,17 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     batch_size = self._replay.batch_size
     
     with tf.name_scope('policies_quotient'):
-      if self.use_fixed_network:
-        qt_argmax_actions = tf.argmax(self._u_replay_fixed_net_outputs.q_values, 
-                                    axis=1, output_type=tf.int32, name='qt_argmax_actions')
+      if self.target_greedy_policy:
+        qt_argmax_actions = tf.random.uniform([batch_size],minval=0,maxval=self.num_actions,
+                                  dtype=tf.int32, name='qt_argmax_actions')
       else:
-        qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
+        if self.use_fixed_network:
+          qt_argmax_actions = tf.argmax(self._u_replay_fixed_net_outputs.q_values, 
+                                      axis=1, output_type=tf.int32, name='qt_argmax_actions')
+        else:
+          qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
                                     axis=1, output_type=tf.int32, name='qt_argmax_actions')
+
       replay_actions = self._replay.actions
       
       coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
