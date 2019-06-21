@@ -361,6 +361,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       self._u_replay_next_fixed_net_outputs = self.fixed_convnet(self._replay.u_next_states)
       self._u_replay_fixed_net_outputs = self.fixed_convnet(self._replay.u_states)
 
+      self._net_outputs = self.fixed_convnet(self.state_ph)
+      self._q_argmax = tf.argmax(self._net_outputs.q_values, axis=1)[0]
+
   def _build_replay_buffer(self, use_staging):
     """Creates the replay buffer used by the agent.
 
@@ -437,7 +440,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     reader = pywrap_tensorflow.NewCheckpointReader(final_checkpoint_dir)
     checkpoint_name_var_list = [key for key in reader.get_variable_to_shape_map().keys()]
     checkpoint_var_list = [var for var in tf.global_variables() if var.name[:-2] in checkpoint_name_var_list]
-    print(checkpoint_var_list)
     self._saver = tf.train.Saver(var_list=checkpoint_var_list, max_to_keep=self.max_tf_checkpoints_to_keep)
 
     tf.logging.info('Trying to reload checkpoint %d', iteration_number)
