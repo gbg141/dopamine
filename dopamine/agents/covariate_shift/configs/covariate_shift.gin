@@ -17,6 +17,7 @@ CovariateShiftAgent.epsilon_eval = 0.1
 CovariateShiftAgent.epsilon_decay_period = 250000  # agent steps
 CovariateShiftAgent.replay_scheme = 'uniform'
 CovariateShiftAgent.tf_device = '/gpu:0' #'/gpu:0', or '/cpu:*' for non-GPU version
+CovariateShiftAgent.max_tf_checkpoints_to_keep = 2
 CovariateShiftAgent.optimizer = @tf.train.AdamOptimizer()
 CovariateShiftAgent.summary_writer = True
 CovariateShiftAgent.summary_writing_frequency = 10000

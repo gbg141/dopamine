@@ -56,6 +56,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                replay_scheme='uniform',
                tf_device='/cpu:*',
                use_staging=True,
+               max_tf_checkpoints_to_keep=4,
                optimizer=tf.train.AdamOptimizer(
                    learning_rate=0.00025, epsilon=0.0003125),
                summary_writer=None,
@@ -114,6 +115,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       tf_device: str, Tensorflow device on which the agent's graph is executed.
       use_staging: bool, when True use a staging area to prefetch the next
         training batch, speeding training up by about 30%.
+      max_tf_checkpoints_to_keep: int, the number of TensorFlow checkpoints to
+        keep.
       optimizer: `tf.train.Optimizer`, for training the value function.
       summary_writer: SummaryWriter object for outputting training statistics.
         Summary writing disabled if set to None.
@@ -232,6 +235,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           epsilon_decay_period=epsilon_decay_period,
           tf_device=tf_device,
           use_staging=use_staging,
+          max_tf_checkpoints_to_keep=max_tf_checkpoints_to_keep,
           optimizer=self.optimizer,
           summary_writer=summary_writer,
           summary_writing_frequency=summary_writing_frequency)
