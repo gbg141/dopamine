@@ -374,11 +374,14 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     """
     # Run a train op at the rate of self.update_period if enough training steps
     # have been run. This matches the Nature DQN behaviour.
-    quotient_epsilon = self.epsilon_fn(
-                        self.quotient_epsilon_decay_period,
-                        self.training_steps,
-                        self.min_replay_history,
-                        self.final_quotient_epsilon)
+    if self.quotient_epsilon_decay_period > 0:
+      quotient_epsilon = self.epsilon_fn(
+                          self.quotient_epsilon_decay_period,
+                          self.training_steps,
+                          self.min_replay_history,
+                          self.final_quotient_epsilon)
+    else:
+      quotient_epsilon = self.final_quotient_epsilon
 
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
@@ -405,7 +408,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     with tf.name_scope('policies_quotient'):
       qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
                                     axis=1, output_type=tf.int32, name='qt_argmax_actions')
-      replay_actions = self._replay.actions
+      replay_actions = self._replay.uniform_transition['action']
       
       coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
 
@@ -501,11 +504,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       log_policies_quotient = tf.log(policies_quotient, name='log_quotient')
       
       # target ratio
-      log_target_ratio = tf.add(log_policies_quotient, log_tiled_support, name='log_target_ratio')
+      log_target_ratio = tf.multiply(self.ratio_discount_factor, log_tiled_support,
+                                              name='log_target_support')
 
       # size of target_support: batch_size x ratio_num_atoms
-      self._log_target_support  = tf.multiply(self.ratio_discount_factor, log_target_ratio,
-                                              name='log_target_support')
+      self._log_target_support  = tf.add(log_policies_quotient, log_target_ratio, name='log_target_ratio')
       self._target_support = tf.exp(self._log_target_support, name='target_support')
 
       # size of next_probabilities: batch_size x ratio_num_atoms
