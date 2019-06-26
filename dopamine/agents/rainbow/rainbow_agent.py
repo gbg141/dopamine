@@ -74,6 +74,7 @@ class RainbowAgent(dqn_agent.DQNAgent):
                replay_scheme='prioritized',
                tf_device='/cpu:*',
                use_staging=True,
+               max_tf_checkpoints_to_keep=4,
                optimizer=tf.train.AdamOptimizer(
                    learning_rate=0.00025, epsilon=0.0003125),
                summary_writer=None,
@@ -147,6 +148,7 @@ class RainbowAgent(dqn_agent.DQNAgent):
         epsilon_decay_period=epsilon_decay_period,
         tf_device=tf_device,
         use_staging=use_staging,
+        max_tf_checkpoints_to_keep=max_tf_checkpoints_to_keep,
         optimizer=self.optimizer,
         summary_writer=summary_writer,
         summary_writing_frequency=summary_writing_frequency)
