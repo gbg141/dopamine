@@ -342,8 +342,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     super(CovariateShiftAgent, self)._build_networks()
 
     with tf.name_scope('u_replay'):
-      self._u_replay_next_net_outputs = self.online_convnet(self._replay.u_next_states)
-      self._u_replay_target_net_outputs = self.target_convnet(self._replay.u_states)
+      self._u_replay_next_net_outputs = self.online_convnet(self._replay.uniform_transition['next_state'])
+      self._u_replay_target_net_outputs = self.target_convnet(self._replay.uniform_transition['state'])
 
   def _build_replay_buffer(self, use_staging):
     """Creates the replay buffer used by the agent.
@@ -623,12 +623,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           with tf.variable_scope('Images_Cmodel'):
             argmax_c_value = tf.argmax(self._u_replay_next_net_outputs.c_values, axis=0)
             self.compute_c_distribution_summaries(argmax_c_value, prefix_name='ARGMAX_')
-            argmax_frame = self._replay.u_next_states[argmax_c_value:argmax_c_value+1,:,:,3:4]
+            argmax_frame = self._replay.uniform_transition['next_state'][argmax_c_value:argmax_c_value+1,:,:,3:4]
             tf.summary.image('ARGMAX_Frame', argmax_frame)
 
             argmin_c_value = tf.argmin(self._u_replay_next_net_outputs.c_values, axis=0)
             self.compute_c_distribution_summaries(argmin_c_value, prefix_name='ARGMIN_')
-            argmin_frame = self._replay.u_next_states[argmin_c_value:argmin_c_value+1,:,:,3:4]
+            argmin_frame = self._replay.uniform_transition['next_state'][argmin_c_value:argmin_c_value+1,:,:,3:4]
             tf.summary.image('ARGMIN_Frame', argmin_frame)
             
       # Schaul et al. reports a slightly different rule, where 1/N is also
@@ -694,22 +694,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
 def project_distribution(supports, weights, target_support):
   """Projects a batch of (support, weights) onto target_support.
-
-  Based on equation (7) in (Bellemare et al., 2017):
-    https://arxiv.org/abs/1707.06887
-  In the rest of the comments we will refer to this equation simply as Eq7.
-
-  This code is not easy to digest, so we will use a running example to clarify
-  what is going on, with the following sample inputs:
-
-    * supports =       [[0, 2, 4, 6, 8],
-                        [1, 3, 4, 5, 6]]
-    * weights =        [[0.1, 0.6, 0.1, 0.1, 0.1],
-                        [0.1, 0.2, 0.5, 0.1, 0.1]]
-    * target_support = [4, 5, 6, 7, 8]
-
-  In the code below, comments preceded with 'Ex:' will be referencing the above
-  values.
+  Based on equation (7) in (Bellemare et al., 2017)
 
   Args:
     supports: Tensor of shape (batch_size, num_dims) defining supports for the
@@ -720,7 +705,7 @@ def project_distribution(supports, weights, target_support):
     target_support: Tensor of shape (num_dims) defining support of the projected
       distribution. The values must be monotonically increasing. Vmin and Vmax
       will be inferred from the first and last elements of this tensor,
-      respectively. The values in this tensor must be equally spaced.
+      respectively.
 
   Returns:
     A Tensor of shape (batch_size, num_dims) with the projection of a batch of
@@ -735,46 +720,44 @@ def project_distribution(supports, weights, target_support):
   target_support_deltas_backward = tf.pad(target_support[:-1] - target_support[1:],
                                           tf.constant([[1,0]]), constant_values=-1)
   
-  validate_deps = []
   supports.shape.assert_is_compatible_with(weights.shape)
   supports[0].shape.assert_is_compatible_with(target_support.shape)
   target_support.shape.assert_has_rank(1)
 
-  with tf.control_dependencies(validate_deps):
-    v_min, v_max = target_support[0], target_support[-1]
-    batch_size = tf.shape(supports)[0]
-    num_dims = tf.shape(target_support)[0]
+  v_min, v_max = target_support[0], target_support[-1]
+  batch_size = tf.shape(supports)[0]
+  num_dims = tf.shape(target_support)[0]
 
-    clipped_support = tf.clip_by_value(supports, v_min, v_max)[:, None, :]
-    tiled_support = tf.tile([clipped_support], [1, 1, num_dims, 1])
+  clipped_support = tf.clip_by_value(supports, v_min, v_max)[:, None, :]
+  tiled_support = tf.tile([clipped_support], [1, 1, num_dims, 1])
 
-    reshaped_target_support = tf.tile(target_support[:, None], [batch_size, 1])
-    reshaped_target_support = tf.reshape(reshaped_target_support,
-                                        [batch_size, num_dims, 1])
+  reshaped_target_support = tf.tile(target_support[:, None], [batch_size, 1])
+  reshaped_target_support = tf.reshape(reshaped_target_support,
+                                      [batch_size, num_dims, 1])
 
-    reshaped_target_support_deltas_forward = tf.tile(target_support_deltas_forward[:, None], 
-                                                     [batch_size, num_dims])
-    reshaped_target_support_deltas_forward = tf.reshape(reshaped_target_support_deltas_forward,
+  reshaped_target_support_deltas_forward = tf.tile(target_support_deltas_forward[:, None], 
+                                                    [batch_size, num_dims])
+  reshaped_target_support_deltas_forward = tf.reshape(reshaped_target_support_deltas_forward,
+                                                      [batch_size, num_dims, num_dims])
+  
+  reshaped_target_support_deltas_backward = tf.tile(target_support_deltas_backward[:, None], 
+                                                    [batch_size, num_dims])
+  reshaped_target_support_deltas_backward = tf.reshape(reshaped_target_support_deltas_backward,
                                                         [batch_size, num_dims, num_dims])
-    
-    reshaped_target_support_deltas_backward = tf.tile(target_support_deltas_backward[:, None], 
-                                                      [batch_size, num_dims])
-    reshaped_target_support_deltas_backward = tf.reshape(reshaped_target_support_deltas_backward,
-                                                         [batch_size, num_dims, num_dims])
-    
-    numerator = tiled_support - reshaped_target_support
-    numerator_sign_mask = numerator[0] <= 0
+  
+  numerator = tiled_support - reshaped_target_support
+  numerator_sign_mask = numerator[0] <= 0
 
-    reshaped_target_support_deltas = tf.where(numerator_sign_mask, 
-                                              reshaped_target_support_deltas_backward,
-                                              reshaped_target_support_deltas_forward)
+  reshaped_target_support_deltas = tf.where(numerator_sign_mask, 
+                                            reshaped_target_support_deltas_backward,
+                                            reshaped_target_support_deltas_forward)
 
-    quotient = 1 - (numerator / reshaped_target_support_deltas)
-    clipped_quotient = tf.clip_by_value(quotient, 0, 1)
+  quotient = 1 - (numerator / reshaped_target_support_deltas)
+  clipped_quotient = tf.clip_by_value(quotient, 0, 1)
 
-    weights = weights[:, None, :]
-    inner_prod = clipped_quotient * weights
+  weights = weights[:, None, :]
+  inner_prod = clipped_quotient * weights
 
-    projection = tf.reduce_sum(inner_prod, 3)
-    projection = tf.reshape(projection, [batch_size, num_dims])
-    return projection
+  projection = tf.reduce_sum(inner_prod, 3)
+  projection = tf.reshape(projection, [batch_size, num_dims])
+  return projection
