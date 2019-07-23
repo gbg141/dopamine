@@ -67,7 +67,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                quotient_epsilon=0.1,
                quotient_epsilon_decay_period=1000000,
                use_loss_weights=False,
-               ratio_num_atoms=101,
+               ratio_num_atoms=51,
+               symmetric_range=True,
+               symmetric_exponent=2,
                ratio_cmin=0.05,
                ratio_cmax=5.,
                log_ratio_approach=False,
@@ -131,6 +133,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       ratio_num_atoms: int, the number of buckets of the ratio function distribution.
       ratio_cmin: float, the predefined minimum ratio value
       ratio_cmax: float, the predefined maximum ratio value
+      symmetric_range: bool, whether to define a symmetric range with respect to the ratio
+        updates,
+      symmetric_exponent: int, number of update multiplications that are contained in
+        the range,
       log_ratio_approach: bool, whether to consider the logarithmic update approach
       use_ratio_exp_bins: bool, whether to use an exponential sequence of bins 
         instead of linear ones
@@ -163,6 +169,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.use_ratio_exp_bins = use_ratio_exp_bins
     self.plot_log_scale = plot_log_scale
     self.define_base_and_exp = define_base_and_exp
+    self.symmetric_range = symmetric_range
+    self.symmetric_exponent = symmetric_exponent
+    if symmetric_range:
+      ratio_cmin = quotient_epsilon**symmetric_exponent
+      ratio_cmax = (num_actions*(1-quotient_epsilon)+quotient_epsilon)**symmetric_exponent
+
     if self.use_ratio_exp_bins and not self.log_ratio_approach:
       if self.define_base_and_exp:
         self._ratio_exp_base = ratio_exp_base
@@ -212,8 +224,10 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       if self.use_ratio_exp_bins and not log_ratio_approach:
         tf.logging.info('\t define_base_and_exp: %s', define_base_and_exp)
       tf.logging.info('\t ratio_num_atoms: %d', self._ratio_num_atoms)
-      tf.logging.info('\t ratio_cmin: %f', self._ratio_cmin)
-      tf.logging.info('\t ratio_cmax: %f', self._ratio_cmax)
+      tf.logging.info('\t ratio_cmin: %f', ratio_cmin)
+      tf.logging.info('\t ratio_cmax: %f', ratio_cmax)
+      tf.logging.info('\t final_ratio_cmin: %f', self._ratio_cmin)
+      tf.logging.info('\t final_ratio_cmax: %f', self._ratio_cmax)
       tf.logging.info('\t ratio_discount_factor: %f', ratio_discount_factor)
       tf.logging.info('\t ratio_loss_weight: %f', ratio_loss_weight)
 
