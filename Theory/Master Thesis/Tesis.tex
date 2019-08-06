@@ -21,6 +21,8 @@
 \DeclareMathOperator*{\N}{\mathbb{N}}
 \DeclareMathOperator*{\Sspace}{\mathcal{S}}
 \DeclareMathOperator*{\A}{\mathcal{A}}
+\DeclareMathOperator*{\T}{\mathcal{T}}
+\DeclareMathOperator*{\Z}{\mathcal{Z}}
 \DeclareMathOperator*{\Y}{\hat{\mathcal{Y}}_{\Hat{\gamma}}}
 
 \numberwithin{equation}{section}
@@ -224,7 +226,8 @@ The Bellman's equation can be obtained from this expression:
 \begin{split}
     Q^\pi (s,a) &= \mathbb{E} \left[ r(s,a) \right] + \gamma \E_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_{t+1},a_{t+1}) \bigg| s_0=s, a_0=a \right] \\
     &= \mathbb{E} \left[ r(s,a) \right] + \gamma \sum_{s'} P(s'|s,a) \left( \E_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_{t+1},a_{t+1}) \bigg| s_1=s' \right] \right) \\
-    &= \mathbb{E} \left[ r(s,a) \right] + \gamma \sum_{s'} P(s'|s,a) \sum_{a'} \pi(a'|s')\left( \E_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_{t+1},a_{t+1}) \bigg| s_1=s', a_1=a' \right] \right)\\
+    &= \mathbb{E} \left[ r(s,a) \right] + \\
+    & \quad \gamma \sum_{s'} P(s'|s,a) \sum_{a'} \pi(a'|s')\left( \E_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_{t+1},a_{t+1}) \bigg| s_1=s', a_1=a' \right] \right)\\
     %&= \mathbb{E} \left[ r(s,a) \right] + \gamma \sum_{s'} P(s'|s,a) \sum_{a'} \pi(a'|s') Q(s',a') \\
     &= \mathbb{E} \left[ r(s,a) \right] + \gamma \E_{s'\sim P(\cdot | s,a), a' \sim \pi(\cdot | s')} \bigg[Q(s',a') \bigg] \\
 \end{split}
@@ -234,14 +237,29 @@ Analogously for the state value function (considering $r_\pi(s) := \mathbb{E}_{a
 \begin{equation} \label{SV}
 \begin{split}
     V^\pi (s) &= \mathbb{E}_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_t,a_t) \bigg| s_0=s\right] \\
-    &= \mathbb{E}_{a\sim\pi(\cdot | s)} \left[ r(s,a) \right] + \gamma \sum_a \pi(a | s) \sum_{s'} P(s'|s,a) \left( \E_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_{t+1},a_{t+1}) \bigg| s_1=s' \right] \right) \\
+    &= r_\pi(s) + \gamma \sum_a \pi(a | s) \sum_{s'} P(s'|s,a) \left( \E_\pi \left[ \sum_{t=0}^\infty \gamma^t r(s_{t+1},a_{t+1}) \bigg| s_1=s' \right] \right) \\
     &= r_\pi(s) + \gamma \E_{s'\sim P_{\pi}(\cdot | s)} \bigg[V^\pi(s') \bigg]
 \end{split}
 \end{equation}
 
+In the context of \textit{policy evaluation}, and considering state-action value functions $Q^\pi$ as vectors in $\R^{\Sspace \times \A}$, the \textit{Bellman operator} $\T^{\pi} : \R^{\Sspace \times \A} \rightarrow \R^{\Sspace \times \A}$ is defined as
+\begin{equation} \label{BellmanOp}
+	{\T}^\pi Q(s,a) :=  \mathbb{E} \left[ r(s,a) \right] + \gamma \E_{s'\sim P(\cdot | s,a), a' \sim \pi(\cdot | s')} \bigg[Q(s',a') \bigg]
+\end{equation}
+Such operator is useful to describe the expected behaviour of popular learning algorithms (e.g. Q-learning) and satisfies some interesting and desirable properties\cite{rlformulation}:
+\begin{itemize}
+	\item It is a contraction mapping (DEFINE IT, OR APPENDIX)
+	\item The process $Q_t = \T^\pi Q_{t-1}$, for some initial value $Q_0$, converges exponentially to $Q^\pi$ as $t \rightarrow \infty$.
+\end{itemize}
 
 
-\subsection{Notation Analysis of Distributional Reinforcement Learning}
+Regarding the \textit{control setting}, where the goal is to improve the current policy $\pi$, a \textit{Bellman optimality operator} $\T^* : \R^{\Sspace \times \A} \rightarrow \R^{\Sspace \times \A}$ is defined as follows:
+\begin{equation} \label{BellmanOptimalityOp}
+	{\T}^* Q(s,a) :=  \mathbb{E} \left[ r(s,a) \right] + \gamma \E_{s'\sim P(\cdot | s,a)} \bigg[ \max_{a' \in \A}  Q(s',a') \bigg]
+\end{equation}
+As it was shown in \cite{rlformulation}, $\T^*$ is also a contraction mapping, and the expectation of $\{ Q_t \}$, $Q_t = \T^* Q_{t-1}$, converges exponentially to a fixed point (in this case, the optimal value function $Q^*$).
+
+\subsection{Towards a Distributional Reinforcement Learning}
 
 TODO: INTRO
 
@@ -251,14 +269,14 @@ In \cite{DRL} a distributional Bellman equation is defined:
 \end{equation}
 where
 \begin{itemize}
-    \item $Z^\pi$ is the \textit{random return} from a state-action pair by following policy $\pi$, whose expectation is the value $Q^\pi$
+    \item $Z^\pi: \Sspace \times \A \rightarrow \Z$ is the \textit{value distribution}, a mapping from state-action pairs to distributions over returns by following policy $\pi$. Its expectation is the value $Q^\pi$
     	\begin{equation} \label{QexpZ}
         		Q^\pi(s,a) := \mathbb{E} [Z^\pi(s,a)]
     	\end{equation}
-    	It is also called the value distribution.
-    \item $(S',A')$ is the next state-action random variable: $s'\sim S'$ with  $P(s' | s,a)$, $A' \sim \pi(\cdot | S')$
-    \item $R(s,a)$ is the random reward, or equivalently the reward function. Note that now we are dealing with it as an explicit random variable.
-    \item $Z^\pi(S',A')$ is the random return over the random next state-action following $\pi$. This notation implies that all possible next state-action pairs need to be considered as to generate this return distribution. Thus, $Z^\pi(S',A')$ may be seen as a mixture distribution of the distributions $Z^\pi(s',a')$ where $s'$ and $a'$ are sampled from $(S',A')$:
+    	We will also called it the \textit{random return}.
+    \item $(S',A') \in \Sspace \times \A$ is the next state-action random variable: $S'\sim P(\cdot | s,a)$, $A' \sim \pi(\cdot | S')$
+    \item $R(s,a) \in \Z$ is the random reward, or equivalently the reward function. Note that now we are dealing with it as an explicit random variable.
+    \item $Z^\pi(S',A') \in \Z$ is the random return over the random next state-action following $\pi$. This notation implies that all possible next state-action pairs need to be considered as to generate this return distribution. Thus, $Z^\pi(S',A')$ may be seen as a mixture distribution of the distributions $Z^\pi(s',a')$ where $s'$ and $a'$ are sampled from $(S',A')$:
     \begin{equation}
         f_{Z^\pi(S',A')} (z) = \sum_{s'} P(s' | s,a) \sum_{a'} \pi(a'|s') f_{Z^\pi(s',a')}(z)
     \end{equation}
@@ -302,7 +320,38 @@ where we have repeatedly used property \ref{mixtureProperty2} of mixture distrib
 \end{split}
 \end{equation}
 
-According to \ref{meaningZ}, $Z(s,a)$ can be interpreted as a convex combination of the sum of discounted reward distributions of all possible agent trajectories starting at the state-action $(a,s)$ and following policy $\pi$ from then on, each weight corresponding to the probability of that precise trajectory. 
+According to \ref{meaningZ}, $Z^{\pi}(s,a)$ can be interpreted as a convex combination of the sum of discounted reward distributions of all possible agent trajectories starting at the state-action $(a,s)$ and following policy $\pi$ from then on, each weight corresponding to the probability of that precise trajectory. It is important to note that $Z^\pi$ encodes the intrinsic randomness of the agent's interactions with its environment; we should avoid considering it as a measure of uncertainty about the environment itself.
+
+Moving to the \textit{policy evakluation} setting, now we are interested in studying the behaviour of a distributional version of the policy evaluation operator $\T^\pi$. First we define the transition operator $P^\pi : \Z \rightarrow \Z$ 
+\begin{equation} \label{distTransitionOp}
+	P^\pi Z(s,a) \stackrel{D}{:=} Z(S',A')
+\end{equation}
+Given this, the \textit{distributional Bellman operator} $\T : \Z \rightarrow \Z$ is defined as
+\begin{equation} \label{distBellmanOp}
+	{\T}^\pi Z(s,a) \stackrel{D}{:=} R(s,a) + \gamma P^{\pi} Z(s,a)
+\end{equation}
+We emphasize that three sources of randomness are involved in the compound distribution ${\T}^\pi Z$, i.e.
+\begin{enumerate}
+	\item Randomness in the reward $R$,
+	\item Randomness in the transition $P^\pi$, and
+	\item Randomness in the next state-value distribution $Z(S', A')$,
+\end{enumerate} 
+which together make this distributional Bellman operator fundamentally different to the expected value-cased one (Equation \ref{BellmanOp}). Authors in \cite{DRL} demonstrate, under the assumption that these three random quantities are independent, that ${\T}^\pi$ is a contraction mapping whose unique fixed point is the value distribution $\Z^\pi$.
+
+
+More difficulties arise when dealing with the \textit{control setting} in its distributional version.
+
+
+
+\subsection{Distributional RL with Tabular Representation}
+
+Wasserstein metric
+
+
+
+\subsection{Distributional RL with Linear Function Approximation}
+
+
 
 \newpage
 
@@ -733,6 +782,20 @@ can be expressed as the convolution of all the individual density functions:
 Convolutions are LINEAR operators.
 
 
+
+\subsubsection*{Metrics over Distributions}
+
+\begin{enumerate}
+ \item Kullback-Leibler divergence
+ \item Wasserstein
+ \item Cramér	
+\end{enumerate}
+
+
+\subsubsection*{Contractions}
+
+
+
 \subsection{Implementation Details}
 
 TODO!!!
@@ -754,8 +817,9 @@ Our baseline is the C51 distributional reinforcement learning agent\cite{DRL} wi
 	\bibitem{dopamine} Dopamine: {A} Research Framework for Deep Reinforcement Learning. \url{https://github.com/google/dopamine}
 	\bibitem{rlformulation} Bertsekas, D. and Tsitsiklis, J. Neuro-Dynamic Programming. Athena Scientific, 1996.
 	\bibitem{ETD} Sutton, R. S., Mahmood, A. R., and White, M. An emphatic approach to the problem of off-policy temporal- difference learning. arXiv:1503.04269, 2015.
-	\bibitem{generalizedETD} Hallak, Assaf, Tamar, Aviv, Munos, Remi, and Mannor, Shie. Generalized emphatic temporal differ- ence learning: Bias-variance analysis. arXiv preprint arXiv:1509.05172, 2015.
-
+	\bibitem{generalizedETD} Hallak, Assaf, Tamar, Aviv, Munos, Remi, and Mannor, Shie. Generalized emphatic temporal difference learning: Bias-variance analysis. arXiv preprint arXiv:1509.05172, 2015.
+	\bibitem{DRLlinear} Marc G. Bellemare, Nicolas Le Roux, Pablo Samuel Castro and Subhodeep Moitra. Distributional reinforcement learning with linear function approximation
+	\bibitem{analysisC51} Rowland, Mark, Bellemare, Marc G, Dabney, Will, Munos, Rémi, and Teh, Yee Whye. An analysis of categorical distributional reinforcement learning. In Proceedings of the International Conference on Artificial Intelligence and Statistics, 2018.
 
 
 
