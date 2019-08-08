@@ -12,6 +12,7 @@
 \usepackage{amsmath}
 \usepackage{amsthm}
 \usepackage{amsfonts}
+\usepackage{mathrsfs}
 \usepackage{graphicx}
 \usepackage{verbatim} 
 \usepackage[algoruled,noline,longend]{algorithm2e}
@@ -23,6 +24,7 @@
 \DeclareMathOperator*{\A}{\mathcal{A}}
 \DeclareMathOperator*{\T}{\mathcal{T}}
 \DeclareMathOperator*{\Z}{\mathcal{Z}}
+\DeclareMathOperator{\Ppi}{\textbf{P}^\pi}
 \DeclareMathOperator*{\Y}{\hat{\mathcal{Y}}_{\Hat{\gamma}}}
 
 \numberwithin{equation}{section}
@@ -35,6 +37,7 @@
 \newtheorem*{corol*}{Corollary}
 
 \theoremstyle{definition}
+\newtheorem{definition}{Definition}
 \newtheorem*{remark}{Remark}
 \newtheorem*{notation}{Notation}
 
@@ -211,6 +214,7 @@ We consider an agent interacting with an environment in the standard setting\cit
     \item $r(s,a)$ represents the immediate reward given by the environment after taking action $a$ being in state $s$. These rewards are considered to be sampled from the reward function $R(s,a)$, i.e. $r_t \sim R(s_t,a_t)$;
     \item $\gamma$ is the discount factor
 \end{itemize}
+
 A policy $\pi$ maps each state to a probability distribution over the action space, $a_t \sim \pi(\cdot | s_t)$. In addition, we combine the policy $\pi$ and transition function $P$ into a state-to-state transition function $P_\pi \in \R^{n \times n}$ , whose entries are
 \begin{equation} \label{transitionFunction}
     P_{\pi} (s'|s) := Prob_\pi (s_{t+1}=s' | s_t = s) = \sum_{a\in\A} \pi(a|s)P(s'|s,a)
@@ -232,6 +236,7 @@ The Bellman's equation can be obtained from this expression:
     &= \mathbb{E} \left[ r(s,a) \right] + \gamma \E_{s'\sim P(\cdot | s,a), a' \sim \pi(\cdot | s')} \bigg[Q(s',a') \bigg] \\
 \end{split}
 \end{equation}
+
 
 Analogously for the state value function (considering $r_\pi(s) := \mathbb{E}_{a\sim\pi(\cdot | s)} \left[ r(s,a) \right]$):
 \begin{equation} \label{SV}
@@ -291,6 +296,10 @@ where
     \end{equation}
 \end{itemize}
 
+\begin{remark}
+A distributional equation $U \stackrel{D}{:=} V$ indicates that the random variable $U$ is distributed according to the same law as $V$.	
+\end{remark}
+
 Note that we can easily recover the classical Bellman's equation \ref{BE} for the action value Q by using \ref{QexpZ} and \ref{expNextRandomReturn} when taking the expected value over its distributional version \ref{distBE}:
 \begin{equation}
 \begin{split}
@@ -339,14 +348,54 @@ We emphasize that three sources of randomness are involved in the compound distr
 which together make this distributional Bellman operator fundamentally different to the expected value-cased one (Equation \ref{BellmanOp}). Authors in \cite{DRL} demonstrate, under the assumption that these three random quantities are independent, that ${\T}^\pi$ is a contraction mapping whose unique fixed point is the value distribution $\Z^\pi$.
 
 
-More difficulties arise when dealing with the \textit{control setting} in its distributional version.
+However, more difficulties arise in the \textit{control setting} when dealing with this distributional perspective; as stated in \cite{DRL}, while every optimal policy attain the same value $Q^*$ in the expected-valued case, there might be many optimal value distribiutions. Considering the set $\Pi^*$ of optimal policies, an optimal value distribution is precisely characterized as follows
+\begin{definition}
+	An optimal value distribution is the value distribution of an optimal policy. The set of optimal value distributions is $\Z^* := \{ Z^{\pi^*} : \pi^* \in \Pi^* \}$.
+\end{definition} 
+Note that an optimal value distribution must match the full distribution of returns under some optimal policy, so that not all value distributions with expectation $Q^*$ are optimal. A \textit{distributional Bellman optimality operator} $\T$ is defined as well, but it doesn't behave as well as the policy evaluation operators: it is not a contraction in any usual metric between distributions, and its convergence to the set of optimal value distributions is weak.
+
+CHANGE: In the following two sections, we focus our analysis of Distributional Reinforcement Learning when working with Tabular Representations and Linear Function Approximators, respectively; this will allow us to study in more detail the cases where good behaviour and convergence are guaranteed.
 
 
 
-\subsection{Distributional RL with Tabular Representation}
+\subsection{Approximation Framework in the Distributional Setting}
 
-Wasserstein metric
+%Let $\Ppi (s,a)$ be the distribution of the random variable $Z^\pi (s,a)$. The process of learning $\Ppi$ 
+We should we aware that the full computation of the distributional Bellman operators on return distribution functions is generally either impossible (as we typically do not have access to the MDP dynamics, but to merely sample transitions) or infeasible (since the value distribution cannot be stored exactly in the general case).
 
+This lead us to the design of several key approximations which are required to implement practical and scalable distributional RL algorithms\cite{analysisC51}:
+
+\subsubsection{Distribution Parametrisation}
+Due to the fact that the full space of probability distributions, $\mathscr{P}(\R)$, cannot be algorithmically encoded with a finite number of parameters, we need to approximate the distribution throughout a parametric family $\mathcal{P} \in \mathscr{P}(\R)$.
+
+\subsubsection{Stochastic Bellman Operators}
+In order to evaluate the distributional Bellman operator $\T^\pi$, all possible next state-action-reward combinations should be taken into account. As in the expected valued case, the usual way of overcoming this practical limitation is by learning through transition samples $(s,a,r,s',a')$ of the MDP. Hence, we can define a \textit{stochastic distributional Bellman operator} $\widehat{\T}^\pi$ adapted to the randomness of these transitions, which defines a random measure whose behaviour is equal in expectation to the true Bellman operator $\T^\pi$.
+
+\subsubsection{Projection of Bellman Target Distribution}
+Another problem usually arises after computing the stochastic operator $\widehat{\T}^\pi$ over a value distribution $Z(s,a)$: the new distribution may no longer lie in the selected parametric family $\mathcal{P}$. If this is the case, we further need to apply a \textit{projection operator} $\Pi : \mathscr{P}(\R) \rightarrow \mathcal{P}$ so as to map $\widehat{\T}^\pi Z(s,a)$ into the proper parametric family.
+
+\subsubsection{Gradient Updates}
+ Finally, having computed a stochastic approximation $\widehat{Z}_k (s_k,a_k) = \Pi \widehat{\T}^\pi Z_k(s_k,a_k)$ to the full target distribution, we still have to define how to compute the next iterate $Z_{k+1}$. For that, the use of gradient updates seems to be appropiate\cite{rlformulation}, as it helps dissipate some noise introduced in the target by the stochastic approximation.
+
+\subsection{Categorical Distributional Reinforcement Learning}
+
+Although the distributional perspective is almost as old as Bellman's equations\cite{firstDistributional}, it was not until the recent introduction of the Categorical Distributional Reinforcement\cite{DRL} that it has become a central role within reinforcement learning. Their algorithm, called C51, was able to obtain state-of-the-art results in the Arcade Learning Environment\cite{ALE} (ALE), outperforming the top expected-valued solutions by then.
+
+The name 'categorical' comes from the distribution parametrisation that is used, which consists in the parametric family of categorical distributions over some fixed set of equally-spaced supports $z_1 < \cdots < z_K$:
+\begin{equation}
+	\mathcal{P} = \left\{ \sum_{i=1}^{K} p_i \delta_{z_i} \Big| p_1, \dots , p_K \geq 0, \sum_{k=1}^{K} p_k = 1 \right\}
+\end{equation}
+Apart from that, the algorithm can be characterized by the rest of approximations (see previous subsection) that are implemented:
+\begin{itemize}
+	\item So as to learn from sampling transitions, we move to the \textit{stochastic distributional Bellman operator} $\widehat{\T}^\pi$ and the \textit{stochastic distributional Bellman optimality operator} $\widehat{\T}^*$. Given a sampled transition $(s_t,a_t,r,s_{t+1},a_{t+1})$, these stochastic operators basically transform the supports of the distributions by an affine shift map $f_{r,\gamma} : \R \rightarrow \R$, defined by $f_{r,\gamma}(z) = r + \gamma z$; in our notation, 
+		$$\widehat{\T}^\pi Z_t(s_t,a_t) = (f_{r,\gamma})_\# Z_t(s_{t+1},a_{t+1})$$
+		with $a_{t+1}$ selected by sampling the policy $\pi(\cdot | s_{t+1})$  (categorical policy evaluation), and 
+		$$\widehat{\T}^* Z_t(s_t,a_t) = (f_{r,\gamma})_\# Z_t(s_{t+1},a_{t+1})$$ 
+		with $a_{t+1}$ being the action with the highest estimated expected returns (categorical Q-learning).
+		
+	\item PROJECTION
+	
+\end{itemize}
 
 
 \subsection{Distributional RL with Linear Function Approximation}
@@ -820,6 +869,8 @@ Our baseline is the C51 distributional reinforcement learning agent\cite{DRL} wi
 	\bibitem{generalizedETD} Hallak, Assaf, Tamar, Aviv, Munos, Remi, and Mannor, Shie. Generalized emphatic temporal difference learning: Bias-variance analysis. arXiv preprint arXiv:1509.05172, 2015.
 	\bibitem{DRLlinear} Marc G. Bellemare, Nicolas Le Roux, Pablo Samuel Castro and Subhodeep Moitra. Distributional reinforcement learning with linear function approximation
 	\bibitem{analysisC51} Rowland, Mark, Bellemare, Marc G, Dabney, Will, Munos, Rémi, and Teh, Yee Whye. An analysis of categorical distributional reinforcement learning. In Proceedings of the International Conference on Artificial Intelligence and Statistics, 2018.
+	\bibitem{firstDistributional} Jaquette, Stratton C. Markov decision processes with a new opti- mality criterion: Discrete time. The Annals of Statistics, 1(3): 496–505, 1973.
+	\bibitem{ALE} Bellemare, Marc G, Naddaf, Yavar, Veness, Joel, and Bowling, Michael. The arcade learning environment: An evaluation plat- form for general agents. Journal of Artificial Intelligence Re- search, 47:253–279, 2013.
 
 
 
