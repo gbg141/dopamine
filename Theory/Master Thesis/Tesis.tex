@@ -379,13 +379,13 @@ Another problem usually arises after computing the stochastic operator $\widehat
 
 \subsection{Categorical Distributional Reinforcement Learning}
 
-Although the distributional perspective is almost as old as Bellman's equations\cite{firstDistributional}, it was not until the recent introduction of the Categorical Distributional Reinforcement\cite{DRL} that it has become a central role within reinforcement learning. Their algorithm, called C51, was able to obtain state-of-the-art results in the Arcade Learning Environment\cite{ALE} (ALE), outperforming the top expected-valued solutions by then.
+Although the distributional perspective is almost as old as Bellman's equations\cite{firstDistributional}, it was not until the recent introduction of the Categorical Distributional Reinforcement\cite{DRL} (CDRL) that it has become a central role within reinforcement learning. Their algorithm, called C51, was able to obtain state-of-the-art results in the Arcade Learning Environment\cite{ALE} (ALE), outperforming the top expected-valued solutions by then.
 
 The name 'categorical' comes from the distribution parametrisation that is used, which consists in the parametric family of categorical distributions over some fixed set of equally-spaced supports $z_1 < \cdots < z_K$:
 \begin{equation}
 	\mathcal{P} = \left\{ \sum_{i=1}^{K} p_i \delta_{z_i} \Big| p_1, \dots , p_K \geq 0, \sum_{k=1}^{K} p_k = 1 \right\}
 \end{equation}
-Apart from that, the algorithm can be characterized by the rest of approximations (see previous subsection) that are implemented:
+Apart from that, the algorithm can be fully characterized by the rest of approximations implemented within the distributional RL framework described in the previous subsection:
 \begin{itemize}
 	\item So as to learn from sampling transitions, we move to the \textit{stochastic distributional Bellman operator} $\widehat{\T}^\pi$ and the \textit{stochastic distributional Bellman optimality operator} $\widehat{\T}^*$. Given a sampled transition $(s_t,a_t,r,s_{t+1},a_{t+1})$, these stochastic operators basically transform the supports of the distributions by an affine shift map $f_{r,\gamma} : \R \rightarrow \R$, defined by $f_{r,\gamma}(z) = r + \gamma z$; in our notation, 
 		$$\widehat{\T}^\pi Z_t(s_t,a_t) = (f_{r,\gamma})_\# Z_t(s_{t+1},a_{t+1})$$
@@ -393,12 +393,60 @@ Apart from that, the algorithm can be characterized by the rest of approximation
 		$$\widehat{\T}^* Z_t(s_t,a_t) = (f_{r,\gamma})_\# Z_t(s_{t+1},a_{t+1})$$ 
 		with $a_{t+1}$ being the action with the highest estimated expected returns (categorical Q-learning).
 		
-	\item PROJECTION
+	\item CDRL applies the heuristic projection operator $\Pi_C$ after computing the stochastic Bellman operators in order to recover a distribution within the selected parametric family $P$. This projection is defined for single Dirac measures as
+	\begin{equation}
+		\Pi_C (\delta_y) = \left\{
+		\begin{array}{ll}
+			\delta_{z_1} & y\leq z_1 \\
+			\\ \frac{z_{i+1} -y}{z_{i+1}-z_i} \delta_{z_i} + \frac{y-z_i}{z_{i+1}-z_i} \delta_{z_{i+1}} & z_i < y < z_{i+1} \\
+			\\ \delta_{z_K} & y>z_K
+		\end{array}
+		\right.
+	\end{equation}
+	and can be easily extended to finite mixtures of Dirac measures: 
+	$$ \Pi_C \left( \sum_{i=1}^{N} p_i \delta_{y_i} \right) = \sum_{i=1}^{N} p_i \Pi_C ( \delta_{y_i} )	$$
+	We will also denote by $\Pi_C$ the operator $\mathscr{P}(\R)^{\Sspace \times \A} \rightarrow \mathcal{P}^{\Sspace \times \A}$ that applies this projection to each distribution in the return distribution function.
+	
+	\item Finally, C51 performs a single step of gradient descent on the Kullback-Leibler divergence (see Appendix \ref{metrics} for the definition of this metric) of the prediction $Z_t(s_t,a_t)$ from the target $\widehat{Z}_t (s_t,a_t)$:
+	$$ \textnormal{KL} \left( \widehat{Z}_t (s_t,a_t) || Z_t (s_t,a_t) \right) $$
+	with respect to the parameters of $Z_t (s_t,a_t)$; this gradient is used to generate the new estimate $Z_{t+1}(s_t,a_t) = \sum_{k=1}^{K} p_{t+1,k}(s_t,a_t) \delta_{z_k}$.
 	
 \end{itemize}
 
+Pseudo-Algorithm \ref{CDRL} (provided by \cite{analysisC51}) synthesises the steps performed by CDRL.
+
+\setlength{\algomargin}{1.5em}
+\SetAlCapHSkip{0em}
+\begin{algorithm}[H]
+\caption{Categorical Distributional Reinforcement Learning} \label{CDRL}
+\DontPrintSemicolon
+\SetKwComment{CustomComment}{\#}{}
+\SetKwInput{KwIn}{\hspace{-1.5em} Input}
+\SetKwInput{KwOut}{\hspace{-1.5em} Output}
+\SetKwInOut{Require}{\hspace{-1.5em} Require}
+\Require{$Z_t(s,a) = \sum_{k=1}^K p_{t,k}(s,a) \delta_{z_k}$ for each $(s,a)$}
+\KwIn{A sample transition $(s_{t},a_{t}, r_t, s_{t+1})$}
+	\CustomComment{Compute distributional Bellman target}
+    \uIf{\textnormal{Categorical Policy Evaluation}}{
+    	$a^* \sim \pi(\cdot | s_{t+1})$ \;}
+    \ElseIf{\textnormal{Categorical Q-learning}}{
+    	$a^* \leftarrow \textnormal{arg max}_a Q(s_{t+1},a) $\;}
+    $\widehat{Z}_{*}(s_t,a_t) \leftarrow (f_{r_t,\gamma})_{\#} Z_t(s_{t+1},a^*)$\;
+    \CustomComment{Project target onto support}
+    $\widehat{Z}_{t}(s_t,a_t) \leftarrow \Pi_C \widehat{Z}_{*}(s_t,a_t)$\;
+    \CustomComment{Compute KL loss}
+    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{Z}_t (s_t,a_t) || Z_t (s_t,a_t) \right) $\; 
+    \textnormal{Generate new estimate }$Z_{t+1}(s_t,a_t) = \sum_{k=1}^{K} p_{t+1,k}(s_t,a_t) \delta_{z_k}$ \;
+\KwOut{Estimate $Z_{t+1}(s,a)$ for each $(s,a)$}
+
+\end{algorithm}
+
+TABULAR REPRESENTATIONS, CONVERGENCE! (Analysis of C51)
+
+
 
 \subsection{Distributional RL with Linear Function Approximation}
+
 
 
 
@@ -828,11 +876,11 @@ can be expressed as the convolution of all the individual density functions:
 	f_{Y} (x) = \left(f_{X_1} * \cdots * f_{X_N} \right) (x)
 \end{equation}
 
-Convolutions are LINEAR operators.
+Convolutions are linear operators.
 
 
 
-\subsubsection*{Metrics over Distributions}
+\subsection{Metrics over Distributions} \label{metrics}
 
 \begin{enumerate}
  \item Kullback-Leibler divergence
@@ -841,7 +889,7 @@ Convolutions are LINEAR operators.
 \end{enumerate}
 
 
-\subsubsection*{Contractions}
+\subsection{Contraction Mappings}
 
 
 

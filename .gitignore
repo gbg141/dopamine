@@ -3,7 +3,7 @@
 *env/
 .vscode/
 .ipynb_checkpoints/
-notebooks/
+#notebooks/
 logs*/
 Papers/
 Experiments/
