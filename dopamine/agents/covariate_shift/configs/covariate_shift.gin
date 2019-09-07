@@ -41,7 +41,7 @@ CovariateShiftAgent.ratio_min_exp = None
 CovariateShiftAgent.ratio_max_exp = 3
 CovariateShiftAgent.ratio_discount_factor = 0.97
 CovariateShiftAgent.ratio_loss_weight = 0.02
-CovariateShiftAgent.freeze_replay_memory = True
+CovariateShiftAgent.freeze_replay_memory = False
 CovariateShiftAgent.only_use_ratio_model = True
 CovariateShiftAgent.target_greedy_policy = False
 
