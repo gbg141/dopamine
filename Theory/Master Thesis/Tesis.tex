@@ -72,8 +72,8 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}}
 
-\setcounter{secnumdepth}{2}
-\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3} 
 \usepackage{hyperref}
 
 %--------------------------------------------------
@@ -83,7 +83,48 @@
 
 \thispagestyle{empty}
 
-Title
+\begin{titlepage}
+
+\begin{center}
+	\vspace*{1cm}
+	\rule{16cm}{0.2mm}\\
+	\vspace*{0.4cm}
+	\Huge{\textbf{Log-Distributional Approach for Learning Covariate Shift Ratios}}
+	\rule{16cm}{0.2mm}\\
+	\vspace{1cm}
+
+	\Large{\textbf{Author: Guillermo Bernárdez Gil}}
+\end{center}
+
+\vspace{0.1cm}
+\large{
+\textbf{1$^{st}$ Advisor: Sergio Escalera}\\
+\indent Departament de Matemàtiques i Informàtica \\ 
+\indent Universitat de Barcelona
+
+\vspace{8mm}
+\textbf{2$^{nd}$ Advisor: Carles Gelada}\\
+\indent Google Brain, Montreal \\
+}
+\vfill
+
+\begin{center}
+	\LARGE{A thesis presented for the degree of\\
+	Master in Artificial Intelligence} \\
+	\vspace{1cm}
+	\includegraphics[width=0.4\textwidth]{logo_upc.jpeg}
+	\includegraphics[width=0.4\textwidth]{logo_urv}
+	\\ 
+	\includegraphics[width=4cm]{logo_ub}
+	\\
+	\large{Facultat d'Informàtica de Barcelona (FIB)} \\
+	\large{Escola Tècnica Superior d'Enginyeria (URV)} \\
+	\large{Facultat de Matemàtiques i Informàtica (UB)} \\
+	\vspace{1cm}
+	\Large{\today}
+\end{center}
+
+\end{titlepage}
 
 
 \newpage
@@ -99,11 +140,11 @@ Title
 
 \section*{Abstract}
 
-Temporal difference learning algorithms classically learn value functions (sum of discounted rewards) by solving for the fixed point that relates the value of one state with the expected value of the following states. Other TD learning algorithms have been used to learn \textit{multiplicative value functions}, which also have a fixed point solution. An example of such a function is the ratio between stationary distributions of two policies. It has been shown that learning of these multiplicative value functions suffers from higher variance and looser convergence guarantees. One potential approach to solving this issues would be to learn in log space, turning the multiplicative value function into an additive one. Unfortunately, it is easy to show with Jensen's inequality that the exponential of the log fixed point does not correspond to the multiplicative fixed point.
+Temporal Difference Learning algorithms classically learn value functions (sum of discounted rewards) by solving for the fixed point that relates the value of one state with the expected value of the following states. Other TD learning algorithms have been used to learn \textit{multiplicative value functions}, which also have a fixed point solution. An example of such a function is the ratio between stationary distributions of two policies. It has been shown that learning of these multiplicative value functions suffers from higher variance and looser convergence guarantees. One potential approach to solving this issues would be to learn in log space, turning the multiplicative value function into an additive one. Unfortunately, it is easy to show with Jensen's inequality that the exponential of the log fixed point does not correspond to the multiplicative fixed point.
 
-Distributional RL has been used to learn the return distribution (return is the sum of future discounted rewards). Although it has been shown that it mainly plays an auxiliary task role for representation learning, we propose that distributional fixed points could play a much more fundamental role to learning non additive value functions. In the case of multiplicative value functions, learning the additive fixed point in log space and exponentiating leads to the correct solution.
+Distributional RL has been used to learn the return distribution (return is the sum of future discounted rewards). Although it has been shown that it mainly plays an auxiliary task role for representation learning, we propose that distributional fixed points could play a much more fundamental role to learning non additive value functions. In the case of multiplicative value distributions, learning the additive fixed point in log space and exponentiating leads to the correct solution.
 
-In particular, we will study this approach in the case of the learning process of the Covariate Shift ratio, which defines a multiplicative value function.
+In particular, we will study this approach in the case of the learning process of the Covariate Shift Ratio, which defines a multiplicative value function.
 
 
 
@@ -326,16 +367,16 @@ We should we aware that the full computation of the distributional Bellman opera
 
 This lead us to the design of several key approximations which are required to implement practical and scalable distributional RL algorithms\cite{analysisC51}:
 
-\subsubsection{Distribution Parametrisation}
+\subsubsection*{Distribution Parametrisation}
 Due to the fact that the full space of probability distributions, $\mathscr{P}(\R)$, cannot be algorithmically encoded with a finite number of parameters, we need to approximate the distribution throughout a parametric family $\mathcal{P} \in \mathscr{P}(\R)$.
 
-\subsubsection{Stochastic Bellman Operators}
+\subsubsection*{Stochastic Bellman Operators}
 In order to evaluate the distributional Bellman operator $\T^\pi$, all possible next state-action-reward combinations should be taken into account. As in the expected valued case, the usual way of overcoming this practical limitation is by learning through transition samples $(s,a,r,s',a')$ of the MDP. Hence, we can define a \textit{stochastic distributional Bellman operator} $\widehat{\T}^\pi$ adapted to the randomness of these transitions, which defines a random measure whose behaviour is equal in expectation to the true Bellman operator $\T^\pi$. %In our theoretical development, for the sake of simplicity, we will consider the simpler setting where stochastic operators are not needed.
 
-\subsubsection{Projection of Bellman Target Distribution}
+\subsubsection*{Projection of Bellman Target Distribution}
 Another problem usually arises after computing the stochastic operator $\widehat{\T}^\pi$ over a value distribution $Z(s,a)$: the new distribution may no longer lie in the selected parametric family $\mathcal{P}$. If this is the case, we further need to apply a \textit{projection operator} $\Pi : \mathscr{P}(\R) \rightarrow \mathcal{P}$ so as to map $\widehat{\T}^\pi Z(s,a)$ into the proper parametric family.
 
-\subsubsection{Gradient Updates}
+\subsubsection*{Gradient Updates}
  Finally, having computed a stochastic approximation $\widehat{Z}_k (s_k,a_k) = \Pi \widehat{\T}^\pi Z_k(s_k,a_k)$ to the full target distribution, we still have to define how to compute the next iterate $Z_{k+1}$. For that, the use of gradient updates seems to be appropiate\cite{rlformulation}, as it helps dissipate some noise introduced in the target by the stochastic approximation. A key aspect here, however, is the not-straightforward correspondence between the considered loss and the previously selected projection; convergence and good behaviour of the resulting algorithm have only be proven when both of them rely on the same norm-induced geometry\cite{analysisC51,rlformulation}
 
 \subsection{Categorical Distributional Reinforcement Learning}
@@ -418,7 +459,7 @@ However, after the introduction of the parametrization $\mathcal{P}$ and the pro
 In contrast to that, Cramér distance seems to induce a useful geometric structure on the space of probability measures, allowing us to establish contractivity of the combined operator $\Pi_C \T^\pi$ in a much more natural way. We dedicate the following two sections to analyze CDRL algorithms together with Cramér-based metrics in the case of both Tabular Representations and Linear Function Approximations, respectively, which are the theoretical frameworks where stable behaviour and convergence properties are proven so far.
 
 
-\subsection{CDRL with Tabular Representation} \label{CDRLtabular}
+\subsubsection{Tabular Representation} \label{CDRLtabular}
 
 Our first approach to study Cramér-based CDRL algorithms will be to consider the simplest reinforcement learning framework, where we are able to store an approximate parametrization distribution for each state-action pair: the so-called tabular case.
 
@@ -435,7 +476,7 @@ The previous proposition directly lead us to the contractivity of the operator $
 \end{prop}
 
 Authors in \cite{analysisC51} also address the natural question of how the limiting distribution function $Z_C$ can differ from the true return distribution $Z^\pi$:
-\begin{prop}
+\begin{prop} \label{errorTabular}
 	Let $Z_C$ be the limiting return distribution of Proposition \ref{CramerBellmanContraction}. If for all state-action pairs their corresponding true return distribution $Z^\pi$ is supported on $[z_1,z_K]$, then 
 	$$\bar{\ell}_2(Z_C, Z^\pi) \leq \frac{1}{1-\gamma} \max_{1\leq i \leq K} (z_{i+1}-z_i). $$
 \end{prop}
@@ -467,7 +508,7 @@ Note that the true return distribution is gradually recovered as the fineness of
 \end{comment}
 
 
-\subsection{CDRL with Linear Function Approximation}
+\subsubsection{Linear Function Approximation} \label{CDRLlinear}
 
 In this second and last theoretical approach, we go a step beyond the tabular case by considering a framework where we make use of function approximators to compute the parametrized return distributions of each state-action pair, assuming a more realistic situation in which the state space is too large to store individual distributions.
 
@@ -592,7 +633,7 @@ Finally, we present the theorem of \cite{DRLlinear} that provides us with the de
 	\begin{equation*}
 		Z(s) = Z'(s) + \alpha(s)e_K.
 	\end{equation*}
-	If $\lambda > 0$, $S$ consists of a single point $\hat{Z}$ wich is the fixed point of the process. Moreover, we can bound the error of this fixed point with respect to the true return distribution $Z^\pi$ by
+	If $\lambda > 0$, $S$ consists of a single point $\hat{Z}$ which is the fixed point of the process. Moreover, we can bound the error of this fixed point with respect to the true return distribution $Z^\pi$ by
 	\begin{equation*}
 		\ell^2_{d_\pi, \lambda} (\hat{Z}, Z^\pi) \leq \frac{1}{1-\gamma} \ell^2_{d_\pi, \lambda} (\Pi_{d_\pi,\lambda,\Phi} Z^\pi, Z^\pi) - \frac{\gamma \lambda}{1-\gamma} \| \hat{Z} - Z^\pi \|_{d_\pi, e_Ke_K^\top},
 	\end{equation*}
@@ -610,7 +651,6 @@ instead of on the $\ell^2_\lambda$ distance. In fact, we refer to $\hat{\ell}_{\
 \end{equation}
 For bounding the approximation error we recover the well-defined distance $\ell^2_{d_\pi, \lambda}$, though.
 
-(MORE COMMENTS; REFERENCE TO ALGORITHM \ref{linearCDRL})
 As pointed out in \cite{DRLlinear}, the parameter $\lambda$ plays an important role in the theorem, both to guarantee convergence and to bound the approximation error. At a high level, this makes sense: a high value of $\lambda$ forces the algorithm to output something close to a distribution, at the expense of actual predictions. On the other hand, taking $\lambda=0$ yields a process which may not converge to a single point.
  
 \begin{comment} 
@@ -704,7 +744,7 @@ The expected behaviour of this learning rule, which learns "in reverse" compared
 \end{equation}
 
 Note that the condition $s_{t+1} = s'$ in the expectation of \ref{COPoperator} forces to take into account the distribution of previous state-action pairs $(s,a)$ according to policy $\mu$. The distribution of the possible previous states $s$ is given by the time-reversal transition function $\Bar{P}_\mu$, whose entries are:
-\begin{equation}
+\begin{equation} \label{timeReversalTransitionFunction}
 \begin{split}
     \Bar{P}_\mu (s | s') &:= Prob_\mu (s_t = s | s_{t+1} = s') \\
     &= \frac{Prob_\mu ( s_{t+1} = s' | s_t = s) Prob_\mu(s_t=s)}{Prob_\mu ( s_{t+1} = s')} \\
@@ -816,8 +856,8 @@ Lemma \ref{fixedPointDCOPTD} gives us more insights about how operator $Y_{\hat{
 
 So, basically, the discounted reset transition function encodes the transition dynamics associated to the use of the DCOP operator. Furthermore, as shown in the following result of \cite{DCOPTD}, we can also get convergence guarantees for the repeated application of $Y_{\hat{\gamma}}$ for $\hat{\gamma} < 1$ without requiring positive initial values or any normalization.
 
-\begin{theorem}
-	Given $\hat{\gamma} < 1$, the process $c^{k+1} := Y_{\hat{\gamma}} c^k$ converges to $\hat{d}_\pi / d_\mu$ for any $c^0 \in \Delta$.
+\begin{theorem} \label{convergenceDCOPTD}
+	Given $\hat{\gamma} < 1$, the process $c^{k+1} := Y_{\hat{\gamma}} c^k$ converges to $\hat{d}_\pi / d_\mu$ for any $c^0 \in \R^n$.%$c^0 \in \Delta$.
 \end{theorem}
 
 
@@ -918,8 +958,9 @@ Thus, paying attention to equation \ref{distCSR}, we note that it intrinsically 
 	\end{itemize}
 \end{notation}
 
-
+\begin{comment}
 \subsection{Distributional COP-TD}
+[SUBSECTION TO BE REMOVED; DIRECTLY TO THE DISCOUNTED CASE]
 
 The definition of the distributional COP operator using the introduced notation is straightforward:
 
@@ -930,7 +971,7 @@ The definition of the distributional COP operator using the introduced notation 
 	\end{equation*}
 	so that 
 	\begin{equation*}
-		f_{(Y^D X)(s_{t+1})}(x) = f_{X(s_{t+1})}(x) = \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\rho(s_{t},a_{t}) X(s_{t})}(x)
+		f_{(Y^D X)(s_{t+1})}(x) =  \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\rho(s_{t},a_{t}) X(s_{t})}(x)
 	\end{equation*}
 \end{definition}
 
@@ -955,36 +996,6 @@ Let's consider $s_{t+1} \in \Sspace$. The result follows from expanding the expe
 \end{split}
 \end{equation}
 where the last step holds taking into account the second term of the expansion \ref{expansionCSR} of the COP operator $Y$.
-
-
-\begin{comment}
-The same re-expression can be done with $\E \left[X(s_{t}) \right]$. In fact, we can apply this argument recursively until arriving to the possible initial state-action pairs $(s_o,a_0)$:
-\begin{equation} \label{recursiveExp}
-	\E[(Y^DX)(s_{t+1})] = \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \rho(s_{t},a_{t}) \cdots \sum_{(s_{0},a_{0})} \alpha(s_{0},a_{0};s_{1}) \rho(s_{0},a_{0}) \E \left[X(s_{0})\right]  
-\end{equation}
-
-Since initial states $s_0$ are independent of the considered policy, we can argue that their covariate shift ratio is 1, so every ratio distribution $X(s_0)$ can be reduced to a Delta Dirac centered at 1; this in turn makes
-\begin{equation*}
-	\E \left[X(s_{0}) \right] = 1 = c(s_0)
-\end{equation*}
-Substituting that in \ref{recursiveExp}, and comparing \ref{expDistCOP} to expansion \ref{expansionCSR} of the expected-based COP operator $Y$, which can analogously be expanded until initial state-action pairs, we conclude
-\begin{equation*}
-\begin{split}
-	\E [(Y^D X)(s_{t+1}) ] &= \E_{s_t \sim \Bar{P}_\mu (\cdot | s_{t+1}), a_t \sim \Bar{\mu}(\cdot|s_t,s_{t+1})} \left[ \rho(s_{t},a_{t}) \E[X(s_t)] \right] \\
-	&= \E_{s_t \sim \Bar{P}_\mu (\cdot | s_{t+1}), a_t \sim \Bar{\mu}(\cdot|s_t,s_{t+1})} \left[ \rho(s_{t},a_{t}) c(s_t) \right] = (Yc)(s_{t+1})
-\end{split}
-\end{equation*}
-
-The expression of the density function \ref{densityDCS} can be rewritten and expanded recursively in the following way:
-\begin{equation}
-\begin{split}
-    f_{X(s_{t+1})}(x) &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\rho(s_{t},a_{t}) X(s_{t})}(x) \\
-    &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\rho(s_{t},a_{t}) \rho(S^{\mu}_{s_{t}},A^{\mu}_{s_{t-1},s_{t}}) X(S^{\mu}_{s_t}) )}(x) \\
-    &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot \sum_{(s_{t-1},a_{t-1})} \alpha(s_{t-1},a_{t-1};s_{t})   \cdot f_{\rho(s_{t},a_{t}) \rho(s_{t-1},a_{t-1}) X(s_{t-1})}(x) \\
-    &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdots \sum_{(s_{0},a_{0})} \alpha(s_{0},a_{0};s_{1}) \cdot f_{ \left(\prod_{i=t}^{0} \rho(s_{i},a_{i})\right)  X(s_{0})}(x)
-\end{split}
-\end{equation}
-\end{comment}
 \end{proof}
 \end{lemma}
 
@@ -1008,96 +1019,124 @@ In the previous Lemma \ref{expectationDistCOPoperator} we show that the expectat
 		Invoking the convergence result of the COP operator $Y$, we conclude that $c^k = \E[X^{k}]$ converges to some fixed point $c \in \R^n$. 
 	\end{proof}
 \end{corol}
-
+\end{comment}
 
 
 
 \subsection{Distributional DCOP-TD}
 
-Having already develop the previous formulation, we can directly define the Distributional DCOP operator%turn equation \ref{distCSR} into its discounted version as it is done in \cite{DCOPTD} in the value-based case:
+We will directly develop the basis of a Distributional $\hat{\gamma}$-Discounted COP-TD, which has provided us with better convergence guarantees in the expected-valued case; in addition, we recall that it's more general in the sense that we can recover the undiscounted setting by simply considering $\hat{\gamma}=1$.
 
 \begin{definition} \label{defDistCOPoperator}
 	We define the \textit{distributional DCOP operator} $Y^D_{\hat{\gamma}}: \mathscr{P}(\R) \rightarrow \mathscr{P}(\R)$ as 
 	\begin{equation*}
 		(Y^D_{\hat{\gamma}} X)(s_{t+1}) :\stackrel{D}{=} \hat{\gamma} \ \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) X(S^{\mu}_{s_{t+1}}) + 1 -\hat{\gamma}
 	\end{equation*}
-	%so that 
-	%\begin{equation*}
-	%	f_{(Y^D X)(s_{t+1})}(x) = f_{X(s_{t+1})}(x) = \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\rho(s_{t},a_{t}) X(s_{t})}(x)
-	%\end{equation*}
+	so that 
+	\begin{equation*}
+		f_{(Y^D X)(s_{t+1})}(x) = \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\hat{\gamma}\rho(s_{t},a_{t}) X(s_{t}) +1 - \hat{\gamma}}(x)
+	\end{equation*}
+	In addition, we can recover the distributional undiscounted setting by simply considering $\hat{\gamma}=1$, with the corresponding \textit{distributional COP operator} $Y^D = Y_1^D$.
 \end{definition}
 
-\begin{prop} \label{expectationDistDCOPoperator}
-	Let $(Y^D_{\hat{\gamma}} X)(s)\in \mathscr{P}(\R)$ be the resulting distribution of applying the distributional DCOP operator over a random ratio $X(s)$, for any state $s \in \Sspace$.  Then we have that
+
+\begin{lemma} \label{expectationDistDCOPoperator}
+	Let $(Y^D_{\hat{\gamma}} X)(s)\in \mathscr{P}(\R)$ be the resulting distribution of applying the distributional DCOP operator over a random ratio $X(s)$, for any state $s \in \Sspace$. Then we have that
 	\begin{equation*}
-		\E [(Y^D_{\hat{\gamma}} X)(s) ] = (Y_{\hat{\gamma}} c)(s)
+		\E [(Y^D_{\hat{\gamma}} X)(s) ] = Y_{\hat{\gamma}} (\E [X(s)])
 	\end{equation*}
-	where $Y_{\hat{\gamma}}$ is the original value-based DCOP operator defined in Equation \ref{DCOPoperator}, and $c\in \R^n$ the usual ratio vector of the DCOP-TD framework.
+	where $Y_{\hat{\gamma}}$ is the original value-based DCOP operator defined in Equation \ref{DCOPoperator}.%, and $c\in \R^n$ the usual ratio vector of the COP-TD framework.
+\begin{proof}
+Let's consider $s_{t+1} \in \Sspace$. The result follows from expanding the expectation of $(Y^D_{\hat{\gamma}} X)(s_{t+1})$ by using Property \ref{mixtureProperty3} of Mixture Distributions (Appendix \ref{mixtureDef}):
+\begin{equation} \label{expDistCOP}
+\begin{split}
+    \E[(Y^D_{\hat{\gamma}}X)(s_{t+1})] &= \int_{-\infty}^{\infty} x f_{(Y^D_{\hat{\gamma}} X)(s_{t+1})}(x) dx \\
+    &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot \int_{-\infty}^{\infty} x f_{\hat{\gamma}\rho(s_{t},a_{t}) X(s_{t}) +1 - \hat{\gamma}}(x) dx \\
+    &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot \E \left[ \hat{\gamma}\rho(s_{t},a_{t}) X(s_{t}) +1 - \hat{\gamma} \right] \\
+    &=  1 - \hat{\gamma} + \hat{\gamma} \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot \rho(s_{t},a_{t}) \cdot \E \left[X(s_{t}) \right]  \\
+    &= 1 - \hat{\gamma} + \hat{\gamma} \E_{s_t \sim \Bar{P}_\mu (\cdot | s_{t+1}), a_t \sim \Bar{\mu}(\cdot|s_t,s_{t+1})} \left[ \rho(s_{t},a_{t}) \E[X(s_t)] \right] \\
+    &= 1 - \hat{\gamma} + \hat{\gamma} Y (\E [X(s)]) = Y_{\hat{\gamma}} (\E [X(s)])
+\end{split}
+\end{equation}
+where the last but one step holds taking into account the second term of the expansion \ref{expansionCSR} of the COP operator $Y$.
+\end{proof}
+\end{lemma}
+
+
+In the previous Lemma \ref{expectationDistDCOPoperator} we show that the expectation of the learned ratio distributions coincide with the values we would learn by applying the usual DCOP operator to the expected values of the ratio distributions. This helps us prove in the following Corollary \ref{convergenceExpectationDistDCOP} that these expectations $\E[(Y^DX)(s)]$ converge to a fixed point, which in turn allows us to estimate the Covariate Shift Ratio values in this Distributional DCOP-TD setting as simply
+\begin{equation*}
+	\frac{d_\pi}{d_\mu}(s) = \E [X(s)]
+\end{equation*}
+
+\begin{corol} \label{convergenceExpectationDistDCOP}
+	Consider the process $X^{k+1} := Y^D_{\hat{\gamma}} X^k$ for any initial ratio distribution $X^0 \in \mathcal{P}(\R)^n$. Then $\E[X^{k}]$ converges to some fixed point $c \in \R^n$ as $k \rightarrow \infty$.
 	
 	\begin{proof}
-	Analogous to the proof of Proposition \ref{expectationDistCOPoperator} with $\hat{\gamma}$-discounted operators.
+		Lemma \ref{expectationDistDCOPoperator} tells us that:
+		\begin{equation*}
+			\E [X^{k+1}] = \E [Y^D_{\hat{\gamma}} X^{k}] = Y_{\hat{\gamma}} (\E [X^k])
+		\end{equation*}
+		Defining $c^k := \E [X^k]$, we note that the above expression defines the process 
+		\begin{equation*}
+			c^{k+1} = Y_{\hat{\gamma}} c^k 
+		\end{equation*}
+		Invoking the convergence result (Theorem \ref{convergenceDCOPTD}) of the DCOP operator $Y_{\hat{\gamma}}$, we conclude that $c^k = \E[X^{k}]$ converges to some fixed point $c \in \R^n$. 
 	\end{proof}
-\end{prop}
+\end{corol}
+
+However, don't have any convergence guarantee for the iterates $\{X_k\}$ to some ratio distribution $X^C$, as we would like to. That is precisely what motivated us to develop the following logarithmic approach, which provides us with the desired distributional convergence.
 
 
+\subsection{Log-Distributional Covariate Shift Approach}
 
+Note that the Distributional Covariate Shift Equation \ref{distCSR} is purely multiplicative, and so it is the associated update rule in the learning setting. This complicates our analysis, and we suspect it is the main reason why we couldn't find any convergence guarantee for the distributional DCOP-TD algorithm.
 
-
-
-%\begin{equation}
-%\E[X (s_{t+1})] = 1- \hat{\gamma}\left(1 - \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot \rho(s_{t},a_{t}) \cdot \E \left[X(s_{t}) \right]  \right)
-%\end{equation}
-%Given that $\E \left[X(s) \right] = c(s)$, the previous equation is equivalent to the result of applying of the DCOP operator, whose convergence is analyzed and proved in \cite{DCOPTD}. This can help us prove the convergence to a fixed point in the distributional setting, whose expectation matches with the covariate shift ratio estimate $c$ in the value-based case.
-
-
-
-\subsection{Categorical Distributional DCOP-TD}
-
-
-
-
-
-
-\newpage
-
-\thispagestyle{plain}
-\section{Logarithmic Approach to Distributional Covariate Shift Ratios}
-
-Note that the Distributional Covariate Shift Equation \ref{distCSR} is purely multiplicative, and so it is the associated update rule in the learning setting. 
+There was, though, one way of transforming that multiplicative behaviour into a better-suited aditive one: working in the logarithmic space. To do so, we first define the corresponding log-ratio distributions:
 
 \begin{definition}
-	Consider any state $s_{t+1}\in \Sspace$, and the corresponding ratio distribution $X(s_{t+1})$. We define the log-ratio distribution $V(s_{t+1})\in \mathscr{P}(\R)$ as
+	Consider any state $s_{t+1}\in \Sspace$, and the corresponding ratio distribution $X(s_{t+1})$. We define the log-ratio distribution $W(s_{t+1})\in \mathscr{P}(\R)$ as
 \begin{equation*}
-	V(s_{t+1}) := \log \left( X(s_{t+1}) \right), %= \log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right) + V(S^{\mu}_{s_{t+1}}) 
+	W(s_{t+1}) := \log \left( X(s_{t+1}) \right), %= \log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right) + V(S^{\mu}_{s_{t+1}}) 
 \end{equation*}
 so that
 \begin{equation*}
 \begin{split}
-	f_{V(s_{t+1})} (x) &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\log\left( \rho(s_{t},a_{t}) X(s_{t}) \right)}(x) \\
-	&= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\log\left( \rho(s_{t},a_{t})\right) + V(s_t)}(x)
+	f_{W(s_{t+1})} (x) &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\log\left( \rho(s_{t},a_{t}) X(s_{t}) \right)}(x) \\
+	&= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\log\left( \rho(s_{t},a_{t})\right) + W(s_t)}(x)
 \end{split}
 \end{equation*}
 \end{definition}
 
+Having these new distribution objects lying in the logarithmic space, our proposal is to learn an estimate of the true log-ratio distribution $W^C$ in that space. Hence, in the undiscounted case, the corresponding learning rule would be captured by the following operator:
+
 \begin{definition}
 	We define the Log-Distributional COP operator $G: \mathscr{P}(\R) \rightarrow \mathscr{P}(\R)$ as
 	\begin{equation}
-		(G V) (s_{t+1}) := \log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right) + V(S^{\mu}_{s_{t+1}})
+		(G W) (s_{t+1}) := \log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right) + W(S^{\mu}_{s_{t+1}})
 	\end{equation}
-	
+	so that
+	\begin{equation*}
+		f_{(GW)(s_{t+1})} (x) = \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\log\left( \rho(s_{t},a_{t})\right) + W(s_t)}(x)
+	\end{equation*}
 \end{definition}
 
-\begin{prop}
-	For any state $s \in \Sspace$, let define $U(s):= \exp (V(s))$. Then we have that
+At this point, one might wonder why this logarithmic approach wasn't considered in the original value-based (D)COP-TD development; the reason is that, in general, Jensen's inequality prevents the correspondence between the multiplicative fixed point and the exponential of the log fixed point:
+\begin{equation*}
+	\E [c(s)] \neq \exp (\E[\log c(s)]) \ \textnormal{ since } \ \E[\log c(s)] \leq \log( \E [c(s)] )
+\end{equation*}
+In contrast to that, Proposition \ref{circumventJensen} shows that we can circumvent this limitation in the distributional setting:  
+
+\begin{prop} \label{circumventJensen}
+	For any state $s \in \Sspace$, let define $U(s):= \exp (W(s))$. Then we have that
 	\begin{equation*}
 		 U(s) :\stackrel{D}{=} X(s)
 	\end{equation*}
 	In particular, this implies that
 	\begin{equation*}
-		\E [\exp (GV(s))] = \E [Y^D X(s)]
+		\E [\exp (GW(s))] = \E [Y^D X(s)]
 	\end{equation*}
 	\begin{proof}
-	We can simply show that density functions of $U(s)$ and $X(s)$ are the same, which is straightforward using Mixture properties:
+	We can simply show that density functions of $U(s)$ and $X(s)$ are the same, which is straightforward using Mixture Properties (Appendix \ref{mixtureDef}):
 		\begin{equation}
 		\begin{split}
 			f_{U(s_{t+1})} (x) &= \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\exp \left( \log\left( \rho(s_{t},a_{t}) X(s_{t}) \right)\right)}(x) \\
@@ -1108,28 +1147,68 @@ so that
 	\end{proof}
 \end{prop}
 
+Note that the previous result ensures that learning the additive fixed distribution $W^C$ in log space and exponentiating it would lead to a proper ratio distribution $X^C$. However, we emphasize that, so far, we don't have any guarantee that these distributional fixed point exists, neither in log space nor in the original multiplicative one. 
 
-In practice, the discounted version is potentially more beneficial, as we have shown in previous Sections. However, now that we work in a logarithmic space, we face the problem of how exactly apply the $\hat{\gamma}$-discounting in order to get a practical and reasonable algorithm. 
+What we do know, though, is that the expectation of the ratio distributions that result from the repeated application of the distributional (D)COP operator converge (Corollary \ref{convergenceExpectationDistDCOP}); the following Corollary of Proposition \ref{circumventJensen} allows us to extend this result to the exponentiated log-ratio distributions, so that, again, we can estimate the Covariate Shift Ratio values in the Log-Distributional COP-TD setting as simply
+\begin{equation*}
+	\frac{d_\pi}{d_\mu}(s) = \E [\exp (W(s))]
+\end{equation*}
+\begin{corol}
+	Consider the process $W^{k+1} := G W^k$ for any initial log-ratio distribution $W^0 \in \mathcal{P}(\R)^n$. Then $\E[\exp (W^{k})]$ converges to some fixed point $c \in \R^n$ as $k \rightarrow \infty$.
+	
+	\begin{proof}
+		In particular, Proposition \ref{circumventJensen} implies that
+		\begin{equation*}
+			\E [\exp (GW(s))] = \E [Y^D X(s)]
+		\end{equation*}
+		From that, the result follows by applying Corollary \ref{convergenceExpectationDistDCOP}.
+	\end{proof}
+\end{corol}
+
+
+Our goal, nonetheless, is to get a more robust convergence result beyond expectations: we would like to prove the existence -and uniqueness- of some fixed point $W^C$. In practice, as we have shown in previous Sections, the discounted version is potentially more suitable to attain that objective, but now that we work in a logarithmic space we face the problem of how exactly apply the $\hat{\gamma}$-discounting in order to get a practical and reasonable algorithm. 
 
 We finally decided to implement the discounting so that the resulting operator belongs to the class of Bellman operators already detailed and analyzed in the RL literature. As we shall see, this will greatly simplify our study, and will provide us with strong convergence results.
 
 
-\begin{definition}
+\begin{definition} 
 	We define the Log-Distributional DCOP operator $G_{\hat{\gamma}}: \mathscr{P}(\R) \rightarrow \mathscr{P}(\R)$ as
-	\begin{equation}
-		(G_{\hat{\gamma}} V) (s_{t+1}) := \log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right) + \hat{\gamma} V(S^{\mu}_{s_{t+1}})
+	\begin{equation} \label{LogDistDCOPoperator}
+		(G_{\hat{\gamma}} W) (s_{t+1}) := \log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right) + \hat{\gamma} W(S^{\mu}_{s_{t+1}})
 	\end{equation}
+	so that
+	\begin{equation*}
+		f_{(G_{\hat{\gamma}}W)(s_{t+1})} (x) = \sum_{(s_{t},a_{t})} \alpha(s_{t},a_{t}|s_{t+1}) \cdot f_{\log\left( \rho(s_{t},a_{t})\right) + \hat{\gamma}W(s_t)}(x)
+	\end{equation*}
 \end{definition}
 
-BELLMAN OPERATOR!!! WITH POLICY $\mu$! Reference to general convergence due to Lemma \ref{contractiondp}
+The similarities of $G_{\hat{\gamma}}$ with the usual distributional Bellman operator (Expression \ref{distBellmanOp}) are quite evident; in fact, the Log-Distributional DCOP operator defines a distributional Bellman update where
+\begin{itemize}
+	\item the policy that drives the agent trajectory is $\mu$
+	\item the state-to-state transition function is $\bar{P}_{\mu}$, the time reversal transition function defined in \ref{timeReversalTransitionFunction}.
+	\item the immediate reward is $\log \left( \rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}}) \right)$
+	\item the discount factor is $\hat{\gamma}$
+	\item the value distribution $W$ is expressed as a sum of $\hat{\gamma}$-discounted rewards
+\end{itemize}
+
+
+The benefits of identifying $G_{\hat{\gamma}}$ as a Bellman operator are hugely relevant, since all results previously presented of the Bellman operator $\T^\pi$ of Distributional Reinforcement Learning hold for our Log-Distributional DCOP operator.  In particular, we can directly re-write the contraction result of Lemma \ref{contractiondp} to
 
 \begin{lemma} \label{contractiondpG}
-	$G_{\hat{\gamma}} : \mathcal{P}(\R) \rightarrow \mathcal{P}(\R)$ is a $\hat{\gamma}$-contraction in $\bar{d}_p$
+	$G_{\hat{\gamma}} : \mathcal{P}(\R) \rightarrow \mathcal{P}(\R)$ is a $\hat{\gamma}$-contraction in $\bar{d}_p$.
+	\begin{proof}
+		Proof of Lemma \ref{contractiondp}.
+	\end{proof}
 \end{lemma}
 
-\begin{prop}
-	The process $V^{k+1} := G_{\hat{\gamma}} V^k$, for any initial log-ratio distribution $V^0$, converges to some fixed point $V^C$.
-\end{prop}
+Hence, we can at last prove the desired convergence of log-ratio distributions to some fixed point in the general distributional setting when using the supremum-Wasserstein metric:
+
+\begin{corol}
+	The process $W^{k+1} := G_{\hat{\gamma}} W^k$, for any initial log-ratio distribution $W^0$, converges to some fixed point $W^C$ in $\bar{d}_p$.
+	\begin{proof}
+		Using Lemma \ref{contractiondpG}, we conclude applying Banach's fixed point theorem that $G_{\hat{\gamma}}$ has a unique fixed point $W^C$. As we assume all moments are bounded, this is sufficient to conclude that the sequence $\{W^k\}$ converges to $W^C$ in $\bar{d}_p$ for $1 < p < \infty$.
+	\end{proof} 
+\end{corol}
 
 
 
@@ -1138,36 +1217,100 @@ BELLMAN OPERATOR!!! WITH POLICY $\mu$! Reference to general convergence due to L
 
 The idea is to design a Categorical framework for Log-Distributional DCOP-TD analogous to those of CDRL algorithms whose convergence has been proven. Hence, we will make use of the following approximations:
 \begin{itemize}
-	\item We consider the parametric family of categorical distributions over some fixed set of equally-spaced supports $v_1 < \cdots < v_K$:
+	\item We consider the parametric family of categorical distributions over some fixed set of equally-spaced supports $w_1 < \cdots < w_K$:
 		\begin{equation*}
-			\mathcal{P} = \left\{ \sum_{i=1}^{K} p_i \delta_{v_i} \Big| p_1, \dots , p_K \geq 0, \sum_{k=1}^{K} p_k = 1 \right\}
+			\mathcal{P} = \left\{ \sum_{i=1}^{K} p_i \delta_{w_i} \Big| p_1, \dots , p_K \geq 0, \sum_{k=1}^{K} p_k = 1 \right\}
 		\end{equation*}
 		
 	\item For any state $s_{t+1} \in \Sspace$, we assume $\rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}})$ can be computed, and we will denote this value as simply $\rho$.
 	
-	\item Given a state $s_{t+1} \in \Sspace$ and its corresponding $\rho$, the Log-Distributional DCOP operator $G_{\hat{\gamma}}$ transforms the support $\{v_1,\dots,v_K\}$ of ratio distributions by an affine shift map $f_{\log(\rho),\hat{\gamma}} : \R \rightarrow \R$ defined by $f_{\log(\rho),\hat{\gamma}}(v_i) := \log(\rho) + \hat{\gamma} v_i$. Hence, we can write
+	\item Given a state $s_{t+1} \in \Sspace$ and its corresponding $\rho$, the Log-Distributional DCOP operator $G_{\hat{\gamma}}$ transforms the support $\{w_1,\dots,w_K\}$ of ratio distributions by an affine shift map $f_{\log(\rho),\hat{\gamma}} : \R \rightarrow \R$ defined by $f_{\log(\rho),\hat{\gamma}}(w_i) := \log(\rho) + \hat{\gamma} w_i$. Hence, we can write
 		\begin{equation*}
-			G_{\hat{\gamma}} V(s) := (f_{\log(\rho),\hat{\gamma}})_{\#} V(s)
+			G_{\hat{\gamma}} W(s) := (f_{\log(\rho),\hat{\gamma}})_{\#} W(s)
 		\end{equation*} 
 	
 	\item We apply the heuristic projection operator $\Pi_C$ defined in \ref{heuristicProjectionOp} so as to recover a ratio distribution within $\mathcal{P}$ after applying the Log-Distributional DCOP operator $G_{\hat{\gamma}}$.
+
+	\item We denote by $W^\mu \in \mathscr{P}(\R)$ the true log-ratio distribution which we aim to estimate.
 \end{itemize}
 
 
+In the following subsections we present the corresponding convergence results for Categorical Log-Distributional DCOP-TD algorithms when using Tabular Representation and Linear Function Approximation, respectively. 
 
 
 
 
 
 
+\subsubsection{Tabular Representation}
 
-\subsection{Tabular Representation}
+Let us first consider the simplest setting, where we assume we are able to store an approximate parametrized log-ratio distribution for each state, and no stochastic approximation is required during the learning process. Given the above categorical framework, the operator to be analyzed is now $\Pi_C G_{\hat{\gamma}}$.
+
+However, due to the fact that $G_{\hat{\gamma}}$ is a Bellman operator, we can re-use the results of Section \ref{CDRLtabular} for CDRL algorithms with Tabular Representation. This dramatically simplifies our study, as we can directly show a strong convergence result in the supremum-Cramér distance:
+
+\begin{prop} \label{CramerBellmanContractionG}
+	The operator $\Pi_C G_{\hat{\gamma}}$ is a $\sqrt{\hat{\gamma}}$-contraction in $\bar{\ell}_2$. Further, there is a unique distribution function $W^C \in \mathcal{P}^{\Sspace}$ to which the process $W^{k+1} := \Pi_c G_{\hat{\gamma}} W^k$, given any initial log-ratio distribution function $W^0 \in \mathscr{P}(\R)^{\Sspace}$, converges in $\bar{\ell}_2$ as $k \rightarrow \infty$.
+	\begin{proof}
+		Proof of Proposition \ref{CramerBellmanContraction}.
+	\end{proof}
+\end{prop}
+
+Moreover, when we know a priori that log-ratio distributions lie in a certain interval, we can easily bound the error of our estimate $W^C$ with respect to the true log-ratio distribution $W^\mu$:
+
+\begin{prop} \label{errorTabularG}
+	Let $W^C$ be the limiting return distribution of Proposition \ref{CramerBellmanContractionG}. If for all states their corresponding true log-ratio distribution $W^\mu$ is supported on $[w_1,w_K]$, then 
+	$$\bar{\ell}_2(W^C, W^\mu) \leq \frac{1}{1-\hat{\gamma}} \max_{1\leq i \leq K} (w_{i+1}-w_i). $$
+	\begin{proof}
+		Proof of Proposition \ref{errorTabular}.
+	\end{proof}
+\end{prop}
+
+This difference can be interpreted as the cost of using the parametrization $\mathcal{P}$; we observe how $W^\mu$ can be recovered by increasing the fineness of the support.
 
 
-\subsection{Linear Function Approximation}
 
 
 
+\subsubsection{Linear Function Approximation}
+
+In our second and last framework, we consider the use of linear function approximation to estima te the parametrized log-ratio distribution of each state. We also make use of the Categorical setting described above, and avoid any stochasticity in the following analysis.
+
+We will introduce the same notation that was presented in Section \ref{CDRLlinear} for CDRL with Linear Function Approximation. Thus, the linear model redefines the approximated log-ratio distributions $W$ as mappings from states $s\in \Sspace$ to vectors defined by a linear combination of features:
+\begin{equation}
+	W_{\Theta}(s) := \Theta^\top \phi(s)
+\end{equation}
+where $\phi(s)\in \R^m$ is the feature vector at state $s$ and $\Theta \in \R^{n\times K}$ represents the weight matrix. In vector notation, we have $W_{\Theta} = \Phi \Theta \in \R^{n\times K}$, where $\Phi \in \R^{n \times m}$ is the feature matrix.
+
+\begin{remark}
+	We recall the assumption that vector $W_{\Theta}(s) \in \R^{K}$ is an estimation of a distribution over the support $\{w_1,\dots,w_K\}$, although it might have negative components and it is not necessarily normalized.
+\end{remark}
+
+Again, all the theory developed in Section \ref{CDRLlinear} with Linear Function Approximation is valid for our Categorical Log-Distributional DCOP-TD due to the class equivalence of operators $G_{\hat{\gamma}}$ and $\T^\pi$, and the equivalence of the Categorical framework. So, in order not to repeat step by step the study presented in that Section \ref{CDRLlinear}, we can directly show the final convergence result that applies in our case:
+
+
+
+\begin{theorem} \label{convergenceLinearCDDCOPTD}
+	Let $d_\mu$ the stationary distribution induced by policy $\mu$. The process
+	\begin{equation*}
+		W^0 := \Phi \Theta^0, \quad W^{k+1} := \hat{\Pi}_{d_\mu,\lambda,\Phi} G_{\hat{\gamma}} W^k
+	\end{equation*}
+	converges to a set $S$ such that, for any two $W, W' \in S$, there is a $\Sspace$-indexed vector of constants $\alpha$ such that
+	\begin{equation*}
+		W(s) = W'(s) + \alpha(s)e_K.
+	\end{equation*}
+	If $\lambda > 0$, $S$ consists of a single point $W^C$ which is the fixed point of the process. Moreover, we can bound the error of this fixed point with respect to the true log-ratio distribution $W^\mu$ by
+	\begin{equation*}
+		\ell^2_{d_\mu, \lambda} (W^C, W^\mu) \leq \frac{1}{1-\hat{\gamma}} \ell^2_{d_\mu, \lambda} (\Pi_{d_\mu,\lambda,\Phi} W^\mu, W^\mu) - \frac{\hat{\gamma} \lambda}{1-\hat{\gamma}} \| W^C - W^\mu \|_{d_\mu, e_Ke_K^\top},
+	\end{equation*}
+	where the second terms measures the difference in mass between $\hat{W}$ and $W^\mu$.
+\end{theorem}
+
+We highlight the previous Theorem \ref{convergenceLinearCDDCOPTD}, as it provides us with a convergence result independent of the value of $\hat{\gamma}$ in the distributional setting with Linear Function Approximation; if we recall Theorem \ref{convergenceDCOPTD} in the value-based setting, convergence was conditioned to a sufficiently small value of the discounting $\hat{\gamma}$.
+
+Hence, we note that our log-distributional approach improves the theoretical convergence guarantees of the process of learning the true ratio distributions. We can perform the learning process in log space, where we can find the additive fixed point $W^C$, and get our estimate $X^C$ of the true ratio distribution as simply
+\begin{equation*}
+	X^C := \exp (W^C)
+\end{equation*}
 
 
 \begin{comment}
@@ -1208,7 +1351,11 @@ expectation:
 \thispagestyle{plain}
 \section{Implementation}
 
-\subsection{Categorical COP-TD}
+We have used the Dopamine RL\cite{dopamine} framework to implement our Covariate Shift Agent.
+
+\subsection{Categorical Distributional DCOP-TD}
+
+Our baseline is the C51 distributional reinforcement learning agent\cite{DRL} within Dopamine framework \cite{dopamine}. We use published hyperparameters unless otherwise noted. We augment the C51 network by adding an extra head, the distributional ratio model $X(s)$, to the final convolutional layer, whose role is to predict the distribution of the ratio $d_\pi / d_\mu$ . This model consists of a two-layer fully-connected network, with as many outputs as the number of atoms $M$ of the parametric model. A final softmax layer transforms the resulting logits into probabilities. 
 
 Analogously to \cite{DRL}, we can attempt to model the CS ratio distribution through a discrete parametric distribution with a certain set of atoms $\{x_i\}_{0 \leq i<M}$, $M \in \mathbb{N}$, as its support. The atom probabilities would be given by a parametric model $\theta : \mathcal{X} \rightarrow \mathbb{R}^M$
 \begin{equation}
@@ -1276,15 +1423,29 @@ Observations:
 \end{itemize}
 
 
-\subsection{Exponential Bins}
+\subsubsection*{Exponential Bins}
 
-\subsection{Log-Categorical COP-TD}
+\subsection{Categorical Log-Distributional DCOP-TD}
 
 
 \newpage 
 
 \thispagestyle{plain}
-\section{Evaluation of the proposal}
+\section{Evaluation of the Proposal}
+
+
+\subsection*{Importance of Ratio Intervals}
+
+
+
+\subsection*{Linear vs Exponential Bins}
+
+
+\subsection*{Log-Distributional Approach}
+
+
+\subsection*{Qualitative Evaluation of the Learned Ratios}
+
 
 
 
