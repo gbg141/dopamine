@@ -27,6 +27,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import pywrap_tensorflow
 import os
+import random
 
 import gin.tf
 
@@ -85,7 +86,13 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                ratio_loss_weight=0.02,
                freeze_replay_memory=True,
                only_use_ratio_model=True,
-               target_greedy_policy=False):
+               target_greedy_policy=False,
+               check_ratio=True,
+               on_policy=True,
+               steps_to_change_policy=1000000,
+               epsilon_first_policy=0.1,
+               epsilon_second_policy=1.0,
+               allow_partial_reload=True):
     """Initializes the agent and constructs the components of its graph.
 
     Args:
@@ -222,6 +229,13 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.only_use_ratio_model = only_use_ratio_model
     self.use_fixed_network = True if freeze_replay_memory and only_use_ratio_model else False
     self.target_greedy_policy = target_greedy_policy
+    self.check_ratio = check_ratio
+    self.use_fixed_network = True if check_ratio and only_use_ratio_model else False
+    self.on_policy = tf.placeholder(tf.bool, name='on_policy')
+    self.change_behaviour_policy = True if self.check_ratio else False
+    self.steps_to_change_policy = steps_to_change_policy + min_replay_history
+    self.epsilon_first_policy = epsilon_first_policy
+    self.epsilon_second_policy = epsilon_second_policy
 
     if self.use_ratio_model:
       tf.logging.info('Extra parameters of %s:', self.__class__.__name__)
@@ -261,7 +275,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
           max_tf_checkpoints_to_keep=max_tf_checkpoints_to_keep,
           optimizer=self.optimizer,
           summary_writer=summary_writer,
-          summary_writing_frequency=summary_writing_frequency)
+          summary_writing_frequency=summary_writing_frequency,
+          allow_partial_reload=allow_partial_reload)
     self.max_tf_checkpoints_to_keep = max_tf_checkpoints_to_keep
     self._fixed_net_sync_op = self._build_fixed_net_sync_op()
 
@@ -374,6 +389,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       self._u_replay_target_net_outputs = self.target_convnet(self._replay.u_states)
     
     if self.use_fixed_network:
+      tf.logging.info('Generating fixed network')
       self.fixed_convnet = tf.make_template('Fixed', self._network_template)
       self._u_replay_next_fixed_net_outputs = self.fixed_convnet(self._replay.u_next_states)
       self._u_replay_fixed_net_outputs = self.fixed_convnet(self._replay.u_states)
@@ -402,6 +418,41 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         gamma=self.gamma,
         extra_storage_types=[ReplayElement('beginning', (), np.bool)])
 
+  def _select_action(self):
+    """Select an action from the set of available actions.
+
+    Chooses an action randomly with probability self._calculate_epsilon(), and
+    otherwise acts greedily according to the current Q-value estimates.
+
+    Returns:
+       int, the selected action.
+    """
+    if self.eval_mode:
+      epsilon = self.epsilon_eval
+    else:
+      if self.check_ratio:
+        if self.change_behaviour_policy:
+          if self.training_steps < self.steps_to_change_policy:
+            epsilon = self.epsilon_first_policy
+          else:
+            tf.logging.info('Changing to random behaviour policy')
+            epsilon = self.epsilon_second_policy
+            self.change_behaviour_policy = False
+        else:
+          epsilon = self.epsilon_second_policy
+      else:
+        epsilon = self.epsilon_fn(
+            self.epsilon_decay_period,
+            self.training_steps,
+            self.min_replay_history,
+            self.epsilon_train)
+    if random.random() <= epsilon:
+      # Choose a random action with probability epsilon.
+      return random.randint(0, self.num_actions - 1)
+    else:
+      # Choose the action with highest Q-value at the current state.
+      return self._sess.run(self._q_argmax, {self.state_ph: self.state})
+
   def _train_step(self):
     """Runs a single training step.
 
@@ -425,11 +476,13 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
-        self._sess.run(self._train_op, feed_dict={self.quotient_epsilon: quotient_epsilon})
+        self._sess.run(self._train_op, 
+                    feed_dict={self.quotient_epsilon: quotient_epsilon, self.on_policy: self.change_behaviour_policy})
         if (self.summary_writer is not None and
             self.training_steps > 0 and
             self.training_steps % self.summary_writing_frequency == 0):
-          summary = self._sess.run(self._merged_summaries, feed_dict={self.quotient_epsilon: quotient_epsilon})
+          summary = self._sess.run(self._merged_summaries, 
+                        feed_dict={self.quotient_epsilon: quotient_epsilon, self.on_policy: self.change_behaviour_policy})
           self.summary_writer.add_summary(summary, self.training_steps)
 
       if self.training_steps % self.target_update_period == 0:
@@ -462,6 +515,14 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     checkpoint_var_list = [var for var in tf.global_variables() if var.name[:-2] in checkpoint_name_var_list]
     self._saver = tf.train.Saver(var_list=checkpoint_var_list, max_to_keep=self.max_tf_checkpoints_to_keep)
 
+    if self.check_ratio:
+      tf.logging.info('Restoring the TensorFlow graph from checkpoint %d', iteration_number)
+      bundle_dictionary = None
+      self._saver.restore(self._sess, os.path.join(checkpoint_dir,
+                         'tf_ckpt-{}'.format(iteration_number)))
+      self._sess.run(self._fixed_net_sync_op)
+      return True
+    
     tf.logging.info('Trying to reload checkpoint %d', iteration_number)
     unbundle = super(CovariateShiftAgent, self).unbundle(checkpoint_dir, iteration_number, bundle_dictionary)
     if unbundle: 
@@ -517,7 +578,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                                           name='no_coincidence_value')
 
       policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
-    
+
+      policies_quotient = tf.cond(self.on_policy, lambda: tf.ones(tf.shape(policies_quotient), tf.float32), lambda: policies_quotient)
+
     return policies_quotient
 
   def _build_target_c_distribution(self):

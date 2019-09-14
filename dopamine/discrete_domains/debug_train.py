@@ -33,7 +33,7 @@ gin_files = 'dopamine/agents/covariate_shift/configs/covariate_shift.gin'
 #gin_files = 'dopamine/agents/rainbow/configs/rainbow.gin'
 #gin_files = 'dopamine/agents/dqn/configs/dqn.gin'
 
-flags.DEFINE_string('base_dir', '/tmp/dopamine',
+flags.DEFINE_string('base_dir', './logs/loglog0025100101n02',
                     'Base directory to host all required sub-directories.')
 flags.DEFINE_multi_string(
     'gin_files', [gin_files], 'List of paths to gin configuration files (e.g.'

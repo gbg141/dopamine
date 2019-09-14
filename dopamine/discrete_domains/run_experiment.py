@@ -112,9 +112,11 @@ def create_runner(base_dir, schedule='continuous_train_and_eval', tensorboard_de
   assert base_dir is not None
   # Continuously runs training and evaluation until max num_iterations is hit.
   if schedule == 'continuous_train_and_eval':
+    tf.logging.info('Continuous training and evaluating')
     return Runner(base_dir, create_agent, tensorboard_debugger=tensorboard_debugger)
   # Continuously runs training until max num_iterations is hit.
   elif schedule == 'continuous_train':
+    tf.logging.info('Continuous training')
     return TrainRunner(base_dir, create_agent)
   else:
     raise ValueError('Unknown schedule: {}'.format(schedule))
@@ -144,6 +146,7 @@ class Runner(object):
                base_dir,
                create_agent_fn,
                create_environment_fn=atari_lib.create_atari_environment,
+               check_ratio=False,
                checkpoint_file_prefix='ckpt',
                logging_file_prefix='log',
                log_every_n=1,
@@ -188,6 +191,7 @@ class Runner(object):
     self._base_dir = base_dir
     self._create_directories()
     self._summary_writer = tf.summary.FileWriter(self._base_dir)
+    self.check_ratio = check_ratio
 
     self._environment = create_environment_fn()
     config = tf.ConfigProto(allow_soft_placement=True)
@@ -243,7 +247,7 @@ class Runner(object):
           latest_checkpoint_version)
       if self._agent.unbundle(
           self._checkpoint_dir, latest_checkpoint_version, experiment_data):
-        if experiment_data is not None:
+        if not self.check_ratio and experiment_data is not None:
           assert 'logs' in experiment_data
           assert 'current_iteration' in experiment_data
           self._logger.data = experiment_data['logs']
