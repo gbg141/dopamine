@@ -40,7 +40,17 @@ which demonstrate how to use Dopamine.
 
 This is not an official Google product.
 
+## Master's Thesis - Guillermo Bernárdez Gil
+
+An implementation of a `CovariateShiftAgent` has been added, which maneges to predict and train ratio estimates 
+that are in turn used as priorities in the learning process of Q values. This agent inherits from the `RainbowAgent` 
+already implemented in this Dopamine framework.
+
+Please, see the related [documentation](https://github.com/gbg141/dopamine/tree/master/docs) for more detailed information.
+
+
 ## What's new
+*  **01/10/2019:** Added `CovariateShiftAgent`.
 *  **11/06/2019:** Visualization utilities added to generate videos and still
    images of a trained agent interacting with its environment. See an example
    colaboratory
