@@ -25,6 +25,7 @@ import time
 from dopamine.agents.dqn import dqn_agent
 from dopamine.agents.implicit_quantile import implicit_quantile_agent
 from dopamine.agents.rainbow import rainbow_agent
+from dopamine.agents.covariate_shift import covariate_shift_agent
 from dopamine.discrete_domains import atari_lib
 from dopamine.discrete_domains import checkpointer
 from dopamine.discrete_domains import iteration_statistics
@@ -32,6 +33,7 @@ from dopamine.discrete_domains import logger
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 
 import gin.tf
 
@@ -57,7 +59,7 @@ def create_agent(sess, environment, agent_name=None, summary_writer=None,
 
   Args:
     sess: A `tf.Session` object for running associated ops.
-    environment: An Atari 2600 Gym environment.
+    environment: A gym environment (e.g. Atari 2600).
     agent_name: str, name of the agent to create.
     summary_writer: A Tensorflow summary writer to pass to the agent
       for in-agent training statistics in Tensorboard.
@@ -85,12 +87,16 @@ def create_agent(sess, environment, agent_name=None, summary_writer=None,
     return implicit_quantile_agent.ImplicitQuantileAgent(
         sess, num_actions=environment.action_space.n,
         summary_writer=summary_writer)
+  elif agent_name == 'covariate_shift':
+    return covariate_shift_agent.CovariateShiftAgent(
+        sess, num_actions=environment.action_space.n,
+        summary_writer=summary_writer)
   else:
     raise ValueError('Unknown agent: {}'.format(agent_name))
 
 
 @gin.configurable
-def create_runner(base_dir, schedule='continuous_train_and_eval'):
+def create_runner(base_dir, schedule='continuous_train_and_eval', tensorboard_debugger=False):
   """Creates an experiment Runner.
 
   Args:
@@ -106,7 +112,7 @@ def create_runner(base_dir, schedule='continuous_train_and_eval'):
   assert base_dir is not None
   # Continuously runs training and evaluation until max num_iterations is hit.
   if schedule == 'continuous_train_and_eval':
-    return Runner(base_dir, create_agent)
+    return Runner(base_dir, create_agent, tensorboard_debugger=tensorboard_debugger)
   # Continuously runs training until max num_iterations is hit.
   elif schedule == 'continuous_train':
     return TrainRunner(base_dir, create_agent)
@@ -144,7 +150,8 @@ class Runner(object):
                num_iterations=200,
                training_steps=250000,
                evaluation_steps=125000,
-               max_steps_per_episode=27000):
+               max_steps_per_episode=27000,
+               tensorboard_debugger=False):
     """Initialize the Runner object in charge of running a full experiment.
 
     Args:
@@ -183,9 +190,14 @@ class Runner(object):
     self._summary_writer = tf.summary.FileWriter(self._base_dir)
 
     self._environment = create_environment_fn()
+    config = tf.ConfigProto(allow_soft_placement=True)
+    # Allocate only subset of the GPU memory as needed which allows for running
+    # multiple agents/workers on the same GPU.
+    config.gpu_options.allow_growth = True
     # Set up a session and initialize variables.
-    self._sess = tf.Session('',
-                            config=tf.ConfigProto(allow_soft_placement=True))
+    self._sess = tf.Session('', config=tf.ConfigProto(allow_soft_placement=True))
+    if tensorboard_debugger:
+      self._sess = tf_debug.TensorBoardDebugWrapperSession(self._sess, "0.0.0.0:7000")
     self._agent = create_agent_fn(self._sess, self._environment,
                                   summary_writer=self._summary_writer)
     self._summary_writer.add_graph(graph=tf.get_default_graph())
@@ -231,10 +243,11 @@ class Runner(object):
           latest_checkpoint_version)
       if self._agent.unbundle(
           self._checkpoint_dir, latest_checkpoint_version, experiment_data):
-        assert 'logs' in experiment_data
-        assert 'current_iteration' in experiment_data
-        self._logger.data = experiment_data['logs']
-        self._start_iteration = experiment_data['current_iteration'] + 1
+        if experiment_data is not None:
+          assert 'logs' in experiment_data
+          assert 'current_iteration' in experiment_data
+          self._logger.data = experiment_data['logs']
+          self._start_iteration = experiment_data['current_iteration'] + 1
         tf.logging.info('Reloaded checkpoint and will start from iteration %d',
                         self._start_iteration)
 

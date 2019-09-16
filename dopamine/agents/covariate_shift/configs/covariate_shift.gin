@@ -1,0 +1,59 @@
+# Hyperparameters follow the settings from Gelada et al. (2017)
+import dopamine.agents.covariate_shift.covariate_shift_agent
+import dopamine.discrete_domains.atari_lib
+import dopamine.discrete_domains.run_experiment
+import dopamine.replay_memory.cs_replay_buffer
+import gin.tf.external_configurables
+
+CovariateShiftAgent.num_atoms = 51
+CovariateShiftAgent.vmax = 10.
+CovariateShiftAgent.gamma = 0.99
+CovariateShiftAgent.update_horizon = 1
+CovariateShiftAgent.min_replay_history = 100000  # agent steps
+CovariateShiftAgent.update_period = 4
+CovariateShiftAgent.target_update_period = 8000  # agent steps
+CovariateShiftAgent.epsilon_train = 1.0
+CovariateShiftAgent.epsilon_eval = 0.1
+CovariateShiftAgent.epsilon_decay_period = 250000  # agent steps
+CovariateShiftAgent.replay_scheme = 'uniform'
+CovariateShiftAgent.tf_device = '/gpu:0' #'/gpu:0', or '/cpu:*' for non-GPU version
+CovariateShiftAgent.max_tf_checkpoints_to_keep = 2
+CovariateShiftAgent.optimizer = @tf.train.AdamOptimizer()
+CovariateShiftAgent.summary_writer = True
+CovariateShiftAgent.summary_writing_frequency = 10000
+CovariateShiftAgent.use_ratio_model = True
+CovariateShiftAgent.use_priorities = True
+CovariateShiftAgent.update_beginning_priorities = True
+CovariateShiftAgent.quotient_epsilon = 0.5
+CovariateShiftAgent.quotient_epsilon_decay_period = 0
+CovariateShiftAgent.use_loss_weights = False
+CovariateShiftAgent.ratio_num_atoms = 51
+CovariateShiftAgent.symmetric_range = True
+CovariateShiftAgent.symmetric_exponent = 2
+CovariateShiftAgent.ratio_cmin = 0.01
+CovariateShiftAgent.ratio_cmax = 100
+CovariateShiftAgent.log_ratio_approach = False
+CovariateShiftAgent.use_ratio_exp_bins = True
+CovariateShiftAgent.plot_log_scale = True
+CovariateShiftAgent.define_base_and_exp = False
+CovariateShiftAgent.ratio_exp_base = 2.
+CovariateShiftAgent.ratio_min_exp = None
+CovariateShiftAgent.ratio_max_exp = 3
+CovariateShiftAgent.ratio_discount_factor = 0.97
+CovariateShiftAgent.ratio_loss_weight = 0.02
+
+tf.train.AdamOptimizer.learning_rate = 0.00025
+tf.train.AdamOptimizer.epsilon = 0.0003125
+
+atari_lib.create_atari_environment.game_name = 'Seaquest'
+# Sticky actions with probability 0.25, as suggested by (Machado et al., 2017).
+atari_lib.create_atari_environment.sticky_actions = True
+create_agent.agent_name = 'covariate_shift'
+create_agent.debug_mode = True
+Runner.num_iterations = 200
+Runner.training_steps = 250000  # agent steps
+Runner.evaluation_steps = 125000  # agent steps
+Runner.max_steps_per_episode = 27000  # agent steps
+
+WrappedCSReplayBuffer.replay_capacity = 10000000
+WrappedCSReplayBuffer.batch_size = 32

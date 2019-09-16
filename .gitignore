@@ -3,7 +3,10 @@
 *env/
 .vscode/
 .ipynb_checkpoints/
-notebooks/
+#notebooks/
+logs*/
+Papers/
+Experiments/
 
 # Compiled source #
 ###################
@@ -13,6 +16,8 @@ notebooks/
 *.exe
 *.o
 *.so
+*.pyc
+*.cpython
 
 # Packages #
 ############
