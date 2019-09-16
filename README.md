@@ -32,10 +32,10 @@ most important by [Hessel et al.][rainbow]:
 For completeness, we also provide an implementation of DQN
 ([Mnih et al., 2015][dqn]).
 For additional details, please see our
-[documentation](https://github.com/google/dopamine/tree/master/docs).
+[documentation](https://github.com/gbg141/dopamine/tree/master/docs).
 
 We provide a set of [Colaboratory
-notebooks](https://github.com/google/dopamine/tree/master/dopamine/colab)
+notebooks](https://github.com/gbg141/dopamine/tree/master/dopamine/colab)
 which demonstrate how to use Dopamine.
 
 This is not an official Google product.
@@ -137,7 +137,7 @@ If you want to run some of the other tests you will need to `pip install mock`.
 #### Atari games
 
 The entry point to the standard Atari 2600 experiment is
-[`dopamine/discrete_domains/train.py`](https://github.com/google/dopamine/blob/master/dopamine/discrete_domains/train.py).
+[`dopamine/discrete_domains/train.py`](https://github.com/gbg141/dopamine/blob/master/dopamine/discrete_domains/train.py).
 To run the basic DQN agent,
 
 ```
@@ -159,7 +159,7 @@ Steps executed: 5903 Episode length: 1203 Return: -19.
 
 To get finer-grained information about the process,
 you can adjust the experiment parameters in
-[`dopamine/agents/dqn/configs/dqn.gin`](https://github.com/google/dopamine/blob/master/dopamine/agents/dqn/configs/dqn.gin),
+[`dopamine/agents/dqn/configs/dqn.gin`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/dqn/configs/dqn.gin),
 in particular by reducing `Runner.training_steps` and `Runner.evaluation_steps`,
 which together determine the total number of steps needed to complete an
 iteration. This is useful if you want to inspect log files or checkpoints, which

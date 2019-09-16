@@ -156,6 +156,8 @@ class WrappedCSReplayBuffer(
     Args:
       transition: tuple of tf.Tensors with shape
         memory.get_transition_elements().
+      is_uniform: boolean that indicates if transitions
+        are uniformly sampled
 
     Returns:
       prefetched_transition: tuple of tf.Tensors with shape

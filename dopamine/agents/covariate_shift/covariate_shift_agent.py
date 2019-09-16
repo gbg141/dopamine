@@ -415,7 +415,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     self.training_steps += 1
 
-  def compute_policies_quotient(self):
+  def _compute_policies_quotient(self):
     '''Computes the quotient of policies that appears at the DCOP update
 
     Returns:
@@ -469,7 +469,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                                name='tiled_support')
 
       # Compute the quotient of policies
-      policies_quotient = tf.tile(self.compute_policies_quotient(), [1, self._ratio_num_atoms],
+      policies_quotient = tf.tile(self._compute_policies_quotient(), [1, self._ratio_num_atoms],
                                   name='quotient')
 
       # Addition of the constant term, 1-discount factor
@@ -517,7 +517,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                                name='tiled_support')
 
       # Compute the log quotient of policies
-      policies_quotient = tf.tile(self.compute_policies_quotient(), [1, self._ratio_num_atoms],
+      policies_quotient = tf.tile(self._compute_policies_quotient(), [1, self._ratio_num_atoms],
                                   name='quotient')
       log_policies_quotient = tf.log(policies_quotient, name='log_quotient')
       
@@ -626,22 +626,22 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             tf.summary.histogram('c_probs', self._u_replay_target_net_outputs.c_probabilities[0,:])
           with tf.variable_scope('Images_Qmodel'):
             argmax_c_value = tf.argmax(self._replay_net_outputs.c_values, axis=0)
-            self.compute_c_distribution_summaries_qmodel(argmax_c_value, prefix_name='ARGMAX_')
+            self._compute_c_distribution_summaries_qmodel(argmax_c_value, prefix_name='ARGMAX_')
             argmax_frame = self._replay.states[argmax_c_value:argmax_c_value+1,:,:,3:4]
             tf.summary.image('ARGMAX_Frame_Q', argmax_frame)
 
             argmin_c_value = tf.argmin(self._replay_net_outputs.c_values, axis=0)
-            self.compute_c_distribution_summaries_qmodel(argmin_c_value, prefix_name='ARGMIN_')
+            self._compute_c_distribution_summaries_qmodel(argmin_c_value, prefix_name='ARGMIN_')
             argmin_frame = self._replay.states[argmin_c_value:argmin_c_value+1,:,:,3:4]
             tf.summary.image('ARGMIN_Frame_Q', argmin_frame)
           with tf.variable_scope('Images_Cmodel'):
             argmax_c_value = tf.argmax(self._u_replay_next_net_outputs.c_values, axis=0)
-            self.compute_c_distribution_summaries(argmax_c_value, prefix_name='ARGMAX_')
+            self._compute_c_distribution_summaries(argmax_c_value, prefix_name='ARGMAX_')
             argmax_frame = self._replay.uniform_transition['next_state'][argmax_c_value:argmax_c_value+1,:,:,3:4]
             tf.summary.image('ARGMAX_Frame', argmax_frame)
 
             argmin_c_value = tf.argmin(self._u_replay_next_net_outputs.c_values, axis=0)
-            self.compute_c_distribution_summaries(argmin_c_value, prefix_name='ARGMIN_')
+            self._compute_c_distribution_summaries(argmin_c_value, prefix_name='ARGMIN_')
             argmin_frame = self._replay.uniform_transition['next_state'][argmin_c_value:argmin_c_value+1,:,:,3:4]
             tf.summary.image('ARGMIN_Frame', argmin_frame)
             
@@ -650,42 +650,42 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       # impact performance in our experiments.
       return self.optimizer.minimize(tf.reduce_mean(final_loss)), final_loss
 
-  def compute_c_distribution_summaries_qmodel(self, index, prefix_name=''):
+  def _compute_c_distribution_summaries_qmodel(self, index, prefix_name=''):
     predicted_dist_support = self._ratio_support 
-    self.c_distribution_summary(
+    self._c_distribution_summary(
       support=predicted_dist_support, 
       dist_values=self._replay_net_outputs.c_probabilities[index], 
       name=prefix_name+'Predicted_Dist_Q')
     
-  def compute_c_distribution_summaries(self, index, prefix_name=''):
+  def _compute_c_distribution_summaries(self, index, prefix_name=''):
     predicted_dist_support = self._ratio_support 
-    self.c_distribution_summary(
+    self._c_distribution_summary(
       support=predicted_dist_support, 
       dist_values=self._u_replay_next_net_outputs.c_probabilities[index], 
       name=prefix_name+'Predicted_Dist')
 
     target_dist_support = self._target_support[index]
-    self.c_distribution_summary(
+    self._c_distribution_summary(
       support=target_dist_support, 
       dist_values=self._u_replay_target_net_outputs.c_probabilities[index], 
       name=prefix_name+'Target_Dist')
 
     projected_dist_support = self._ratio_support 
-    self.c_distribution_summary(
+    self._c_distribution_summary(
       support=projected_dist_support, 
       dist_values=self.c_target_distribution[index], 
       name=prefix_name+'Projected_Dist') 
             
-  def c_distribution_summary(self, support, dist_values, name=None):
+  def _c_distribution_summary(self, support, dist_values, name=None):
     c_value = tf.reduce_sum(support*dist_values, axis=0)
     pred_dist = tf.py_func(
-      self.plot_c_value_distribution, [c_value, support, dist_values, self.use_ratio_exp_bins, self.plot_log_scale],
+      self._plot_c_value_distribution, [c_value, support, dist_values, self.use_ratio_exp_bins, self.plot_log_scale],
       [tf.uint8],
       name=name
     )
     tf.summary.image(name, pred_dist)
 
-  def plot_c_value_distribution(self, c_value, support, dist_values, use_exp_bins=False, log_scale=True): 
+  def _plot_c_value_distribution(self, c_value, support, dist_values, use_exp_bins=False, log_scale=True): 
     num_atoms = support.shape[0]
     fig, ax = plt.subplots(figsize=(5, 3))
     if use_exp_bins:

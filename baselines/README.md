@@ -7,10 +7,10 @@ providing yields a standardized "apples to apples" comparison between them.
 The default configuration files files for each agent (set up with
 [gin configuration framework](https://github.com/google/gin-config)) are:
 
-*   [`dopamine/agents/dqn/configs/dqn.gin`](https://github.com/google/dopamine/blob/master/dopamine/agents/dqn/configs/dqn.gin)
-*   [`dopamine/agents/rainbow/configs/c51.gin`](https://github.com/google/dopamine/blob/master/dopamine/agents/rainbow/configs/c51.gin)
-*   [`dopamine/agents/rainbow/configs/rainbow.gin`](https://github.com/google/dopamine/blob/master/dopamine/agents/rainbow/configs/rainbow.gin)
-*   [`dopamine/agents/implicit_quantile/configs/implicit_quantile.gin`](https://github.com/google/dopamine/blob/master/dopamine/agents/implicit_quantile/configs/implicit_quantile.gin)
+*   [`dopamine/agents/dqn/configs/dqn.gin`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/dqn/configs/dqn.gin)
+*   [`dopamine/agents/rainbow/configs/c51.gin`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/rainbow/configs/c51.gin)
+*   [`dopamine/agents/rainbow/configs/rainbow.gin`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/rainbow/configs/rainbow.gin)
+*   [`dopamine/agents/implicit_quantile/configs/implicit_quantile.gin`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/implicit_quantile/configs/implicit_quantile.gin)
 
 ## Hyperparemeter comparison
 Our results compare the agents with the same hyperparameters: target
@@ -36,7 +36,7 @@ We provide a [website](https://google.github.io/dopamine/baselines/plots.html)
 where you can quickly visualize the training runs for all our default agents.
 
 The plots are rendered from a set of
-[JSON files](https://github.com/google/dopamine/tree/master/baselines/data)
+[JSON files](https://github.com/gbg141/dopamine/tree/master/baselines/data)
 which we compiled. These may prove useful in their own right to compare
 against results obtained from other frameworks.
 
