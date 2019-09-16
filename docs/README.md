@@ -26,6 +26,22 @@ Dopamine is organized as follows:
 *   [`tests`](https://github.com/gbg141/dopamine/tree/master/tests)
     contains all our test files.
 
+## Master's Thesis - Guillermo Bernárdez Gil
+
+The original code developed for the Master's Thesis constructs the Covariate Shift Agent, which is contained in two files:
+
+*   The agent class in
+    [`dopamine/agents/covariate_shift/covariate_shift_agent.py`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/covariate_shift_agent.py),
+    inheriting from the Rainbow agent. (See the Doc of this module [here](https://github.com/gbg141/dopamine/blob/master/docs/api_docs/python/covariate_shift_agent.md))
+*   The replay buffer in
+    [`dopamine/replay_memory/cs_replay_buffer.py`](https://github.com/gbg141/dopamine/blob/master/dopamine/replay_memory/cs_replay_buffer.py),
+    inheriting from prioritized replay buffer. (See the Doc of this module [here](https://github.com/gbg141/dopamine/blob/master/docs/api_docs/python/cs_replay_buffer.md))
+
+The agent class extends the Rainbow agent so that we can also predict and train covariate shift ratio estimates. As it was referred above, more information about each of the modules, classes and functions that conforms this agent can be found at the [API documentation](https://github.com/gbg141/dopamine/blob/master/docs/api_docs/python/cs_replay_buffer.md).
+
+The corresponding configuration file is
+*   [`dopamine/agents/covariate_shift/configs/covariate_shift.gin`](https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/configs/covariate_shift.gin)
+
 ## Configuring agents
 
 The whole of Dopamine is easily configured using the
