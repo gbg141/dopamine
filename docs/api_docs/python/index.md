@@ -11,6 +11,10 @@
 *   <a href="./circular_replay_buffer.md"><code>circular_replay_buffer</code></a>
 *   <a href="./circular_replay_buffer/OutOfGraphReplayBuffer.md"><code>circular_replay_buffer.OutOfGraphReplayBuffer</code></a>
 *   <a href="./circular_replay_buffer/WrappedReplayBuffer.md"><code>circular_replay_buffer.WrappedReplayBuffer</code></a>
+*   <a href="./covariate_shift_agent.md"><code>covariate_shift_agent</code></a>
+*   <a href="./covariate_shift_agent/CovariateShiftAgent.md"><code>covariate_shift_agent.CovariateShiftAgent</code></a>
+*   <a href="./covariate_shift_agent/project_distribution.md"><code>covariate_shift_agent.project_distribution</code></a>
+*   <a href="./cs_replay_buffer/WrappedCSReplayBuffer.md"><code>cs_replay_buffer.WrappedCSReplayBuffer</code></a>
 *   <a href="./dqn_agent.md"><code>dqn_agent</code></a>
 *   <a href="./dqn_agent/DQNAgent.md"><code>dqn_agent.DQNAgent</code></a>
 *   <a href="./atari_lib/nature_dqn_network.md"><code>dqn_agent.nature_dqn_network</code></a>
