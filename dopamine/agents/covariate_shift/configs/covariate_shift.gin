@@ -27,7 +27,7 @@ CovariateShiftAgent.update_beginning_priorities = True
 CovariateShiftAgent.quotient_epsilon = 0.5
 CovariateShiftAgent.quotient_epsilon_decay_period = 0
 CovariateShiftAgent.use_loss_weights = False
-CovariateShiftAgent.ratio_num_atoms = 101
+CovariateShiftAgent.ratio_num_atoms = 51
 CovariateShiftAgent.symmetric_range = True
 CovariateShiftAgent.symmetric_exponent = 2
 CovariateShiftAgent.ratio_cmin = 0.01
@@ -40,7 +40,7 @@ CovariateShiftAgent.ratio_exp_base = 2.
 CovariateShiftAgent.ratio_min_exp = None
 CovariateShiftAgent.ratio_max_exp = 3
 CovariateShiftAgent.ratio_discount_factor = 0.97
-CovariateShiftAgent.ratio_loss_weight = 0.02
+CovariateShiftAgent.ratio_loss_weight = 0.002
 CovariateShiftAgent.freeze_replay_memory = False
 CovariateShiftAgent.only_use_ratio_model = True
 CovariateShiftAgent.target_greedy_policy = False
@@ -52,7 +52,7 @@ CovariateShiftAgent.epsilon_second_policy = 1.0
 tf.train.AdamOptimizer.learning_rate = 0.00025
 tf.train.AdamOptimizer.epsilon = 0.0003125
 
-atari_lib.create_atari_environment.game_name = 'Seaquest'
+atari_lib.create_atari_environment.game_name = 'Breakout'
 # Sticky actions with probability 0.25, as suggested by (Machado et al., 2017).
 atari_lib.create_atari_environment.sticky_actions = True
 create_agent.agent_name = 'covariate_shift'

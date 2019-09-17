@@ -5,7 +5,7 @@
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export CUDA_VISIBLE_DEVICES=5
 
-base=./logs/Seaquest/logapproach/centeredRange/x2/check_ratio
+base=./logs/Breakout/logapproach/centeredRange/x2/check_ratio
 host=0.0.0.0
 port=6006
 gin_files='dopamine/agents/covariate_shift/configs/covariate_shift.gin'
