@@ -708,7 +708,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
 def project_distribution(supports, weights, target_support):
   """Projects a batch of (support, weights) onto target_support.
-  Based on equation (7) in (Bellemare et al., 2017)
+  Based on equation (7) in (Bellemare et al., 2017), but extended 
+  to deal with non-equally spaced supports.
 
   Args:
     supports: Tensor of shape (batch_size, num_dims) defining supports for the

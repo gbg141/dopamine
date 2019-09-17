@@ -74,7 +74,12 @@
 
 \setcounter{secnumdepth}{3}
 \setcounter{tocdepth}{3} 
-\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[colorlinks = true,
+            linkcolor = blue,
+            urlcolor  = blue,
+            citecolor = blue,
+            anchorcolor = blue]{hyperref}
 
 %--------------------------------------------------
 
@@ -360,7 +365,7 @@ Note that an optimal value distribution must match the full distribution of retu
 
 
 
-\subsection{Approximation Framework in the Distributional Setting}
+\subsection{Approximation Framework in the Distributional Setting} \label{aproxFramework}
 
 %Let $\Ppi (s,a)$ be the distribution of the random variable $Z^\pi (s,a)$. The process of learning $\Ppi$ 
 We should we aware that the full computation of the distributional Bellman operators on return distribution functions is generally either impossible (as we typically do not have access to the MDP dynamics, but to merely sample transitions) or infeasible (since the value distribution cannot be stored exactly in the general case).
@@ -1224,7 +1229,7 @@ The idea is to design a Categorical framework for Log-Distributional DCOP-TD ana
 		
 	\item For any state $s_{t+1} \in \Sspace$, we assume $\rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}})$ can be computed, and we will denote this value as simply $\rho$.
 	
-	\item Given a state $s_{t+1} \in \Sspace$ and its corresponding $\rho$, the Log-Distributional DCOP operator $G_{\hat{\gamma}}$ transforms the support $\{w_1,\dots,w_K\}$ of ratio distributions by an affine shift map $f_{\log(\rho),\hat{\gamma}} : \R \rightarrow \R$ defined by $f_{\log(\rho),\hat{\gamma}}(w_i) := \log(\rho) + \hat{\gamma} w_i$. Hence, we can write
+	\item Given a state $s_{t+1} \in \Sspace$ and its corresponding $\rho$, the Log-Distributional DCOP operator $G_{\hat{\gamma}}$ transforms the support $\{w_1,\dots,w_K\}$ of log-ratio distributions by an affine shift map $f_{\log(\rho),\hat{\gamma}} : \R \rightarrow \R$ defined by $f_{\log(\rho),\hat{\gamma}}(w_i) := \log(\rho) + \hat{\gamma} w_i$. Hence, we can write
 		\begin{equation*}
 			G_{\hat{\gamma}} W(s) := (f_{\log(\rho),\hat{\gamma}})_{\#} W(s)
 		\end{equation*} 
@@ -1351,7 +1356,88 @@ expectation:
 \thispagestyle{plain}
 \section{Implementation}
 
-We have used the Dopamine\cite{dopamine}, a research framework for fast prototyping of reinforcement learning algorithms, to implement our Covariate Shift Agent.
+In the previous sections, the theoretical framework has been presented and analyzed in detail. Our goal now is to describe how we have implemented that framework in practice
+
+First of all, it is important to note that we haven't coded everything from scratch; instead, we have used Dopamine\cite{dopamine}, a research framework for fast prototyping of reinforcement learning algorithms, to implement our Distributional Covariate Shift approach. All the development can be found at our \href{https://github.com/gbg141/dopamine}{Github repository}. 
+
+Basically, our baseline is the \texttt{RainbowAgent} already implemented in Dopamine with the C51 configuration file. The resulting \texttt{CovariateShiftAgent} is contained in two files:
+\begin{itemize}
+	\item The agent class in \href{https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/covariate_shift_agent.py}{\texttt{dopamine/agents/covariate\_shift/covariate\_shift\_agent.py}}, inheriting from \texttt{rainbow\_agent.RainbowAgent}.
+	\item The replay buffer in \href{https://github.com/gbg141/dopamine/blob/master/dopamine/replay_memory/cs_replay_buffer.py}{\texttt{dopamine/replay\_memory/cs\_replay\_buffer.py}}, inheriting from \texttt{prioritized\_replay\_buffer.WrappedPrioritizedReplayBuffer}.
+\end{itemize}
+In addition, the configuration file 
+$$\href{https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/configs/covariate_shift.gin}{\texttt{dopamine/agents/covariate\_shift/configs/covariate\_shift.gin}}$$
+allows us to easily control all hyper-parameter values of the agent.
+
+For more technical information about the implementation, we refer to the \href{https://github.com/gbg141/dopamine/tree/master/docs}{API Documentation} of our repository, in which we detail each module, class and function that conforms this agent. In the following subsections, we will describe the key points of our practical framework at a higher level of abstraction.
+
+\subsection{Distributional Setting}
+
+We recall Section \ref{aproxFramework}, where we described the approximation framework defined in \cite{analysisC51} to implement reproducible and scalable distributional-based RL algorithms. Let's see how we have dealt in practice with each of the key points of that framework:
+
+\subsubsection*{Distribution Parametrisation}
+Just as we considered along the theoretical framework, we select the parametric family of categorical distributions over some fixed set of supports $z_1 < \cdots < z_K$:
+\begin{equation*}
+	\mathcal{P} = \left\{ \sum_{i=1}^{K} p_i \delta_{z_i} \Big| p_1, \dots , p_K \geq 0, \sum_{k=1}^{K} p_k = 1 \right\}
+\end{equation*}
+The only difference is that our implementation allows to define supports which are not necessarily equally-spaced; in fact, apart from linear divisions of the support, in our experiments we have also taken into account exponential bins.
+
+
+\subsubsection*{Stochastic Learning}
+Despite the convergence results have been obtained without stochasticity, in practice it is difficult to find an example where it can be rejected. Hence, supported with the work done in \cite{analysisC51, DRLlinear} regarding stochastic updates, our implementation learns to predict covariate shift ratio estimates through transition samples of the MDP.
+
+In particular, the practical samples for the ratio model are simply of the form $(s_t,a_t,s_{t+1})$; neither the immediate reward $r_t$ nor the next action $a_{t+1}$ are required. However, in order to define the learning rule, the ratio of policies $\rho(S^{\mu}_{s_{t+1}},A^{\mu}_{s_{t},s_{t+1}})$ must be computed; in our stochastic setting, given a transition $(s_t,a_t,s_{t+1})$, it is estimated as $\rho_t := \rho(s_t,a_t)$. Since
+\begin{itemize}
+    \item the \textit{behavioural policy} $\mu$ is simply the uniformly random policy, i.e. 
+    \begin{equation*} \label{behaviourPolicy}
+        \mu(a_t|s_t) = \frac{1}{|\mathcal{A}|} \quad \forall a \in \mathcal{A};
+    \end{equation*}
+    \item the \textit{target policy} $\pi$ is the $\epsilon$-greedy policy with respect to the estimated state-action q-values of the model, i.e.
+    \begin{equation*} \label{targetPolicy}
+        \pi_\theta (a_t|s_t) = 
+        \left\{ 
+            \begin{array}{lcc}
+                (1-\epsilon)+\epsilon \frac{1}{|\mathcal{A}|} &   \text{if} & a_t = \text{arg max}_{a} Q_\theta(s_t,a) \\
+                \epsilon \frac{1}{|\mathcal{A}|} &  \text{otherwise} &
+            \end{array}
+        \right. 
+    \end{equation*}
+\end{itemize}
+we can easily obtain a computable expression:
+\begin{equation} \label{policyQuotient}
+        \rho_t = \frac{\pi_\theta (a_t|s_t)}{\mu(a_t|s_t)} = 
+        \left\{ 
+            \begin{array}{lcc}
+                |\mathcal{A}|(1-\epsilon)+\epsilon  &   \text{if} & a_t = \text{arg max}_a Q_\theta(s_t,a) \\
+                \epsilon  &  \text{otherwise} &
+            \end{array}
+        \right. 
+\end{equation}
+
+Once we have the ratio computed for each sample, it is straightforward to define both the \textit{stochastic Distributional DCOP operator} $\hat{Y}^D_{\hat{\gamma}}$ and the \textit{stochastic Log-Distributional DCOP operator} $\hat{G}_{\hat{\gamma}}$, which modify the supports of ratio distributions and log ratio distributions, respectively, according to the 1-step information contained in each sample.
+
+
+
+\subsubsection*{Projection of Bellman Target Distribution}
+In order to recover a ratio distribution within $\mathcal{P}$ after applying the stochastic operator -either $\hat{Y}^D_{\hat{\gamma}}$ or $\hat{G}_{\hat{\gamma}}$, depending on the case-, we also use the heuristic projection operator $\Pi_C$ defined in \ref{heuristicProjectionOp}; in particular, we coded it extended to finite mixtures of Dirac measures: 
+	$$ \Pi_C \left( \sum_{i=1}^{N} p_i \delta_{y_i} \right) = \sum_{i=1}^{N} p_i \Pi_C ( \delta_{y_i} )	$$
+
+
+We note, however, that our implementation of the function \texttt{project\_distribution($\dots$)}\footnote{This function can be found in \href{https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/covariate_shift_agent.py}{\texttt{dopamine/agents/covariate\_shift/covariate\_shift\_agent.py}}}, responsible of performing this projection $\Pi_C$, differs from the already implemented in Dopamine; we have slightly modified it so as to allow non-equally spaced supports, thus enabling the option of running experiments with exponential bins as well.
+
+
+\subsubsection*{Gradient Updates}
+-A decision had to be taken about how to compute the next iterate of our stochastic approximation. Attending to what we have shown in our theoretical framework, defining a gradient update based on a Cramér loss seem to be the most appropriate solution given that we have implemented the Cramér projection $\Pi_C$. However, we finally decided to imitate the original C51 agent and perform a single step of gradient descent on the Kullback-Leibler divergence of the predicted distribution from the target one with respect to the parameters of the prediction.
+
+The reasons behind our decision are purely practical; despite there is no convergence guarantee of C51 due to this KL divergence step, so far its experimental results\cite{DRL} are much better than those that strictly rely on the theoretical framework\cite{DRLlinear}. Hence, as we now seek for the best performance possible of our Distributional Covariate Shift approach, we kind of ignore that part of the theory and implement the KL gradient update for generating the new estimates of our \texttt{CovariateShiftAgent}.
+ 
+
+
+\subsection{Non-linear Function Approximation}
+
+In our attempt to imitate C51 in order to achieve the best performance, we also 
+
+
 
 \subsection{Categorical Distributional DCOP-TD}
 
@@ -1422,8 +1508,6 @@ Observations:
     \end{equation}
 \end{itemize}
 
-
-\subsubsection*{Exponential Bins}
 
 \subsection{Categorical Log-Distributional DCOP-TD}
 
