@@ -50,7 +50,7 @@
 
 \def\qed{\hfill $\square$}
 
-\graphicspath{ {./logos/} }
+\graphicspath{ {./images/logos/}{./images/} }
 
 % --------------------------------------------------
 \usepackage{fancyhdr}
@@ -1358,18 +1358,60 @@ expectation:
 
 In the previous sections, the theoretical framework has been presented and analyzed in detail. Our goal now is to describe how we have implemented that framework in practice
 
-First of all, it is important to note that we haven't coded everything from scratch; instead, we have used Dopamine\cite{dopamine}, a research framework for fast prototyping of reinforcement learning algorithms, to implement our Distributional Covariate Shift approach. All the development can be found at our \href{https://github.com/gbg141/dopamine}{Github repository}. 
-
-Basically, our baseline is the \texttt{RainbowAgent} already implemented in Dopamine with the C51 configuration file. The resulting \texttt{CovariateShiftAgent} is contained in two files:
+First of all, we highlight the use of Dopamine\cite{dopamine}, a research framework for fast prototyping of reinforcement learning algorithms, to implement our Distributional Covariate Shift approach; all the development can be found at our \href{https://github.com/gbg141/dopamine}{Github repository}. Basically, our baseline is the \texttt{RainbowAgent}\cite{Rainbow} already implemented in Dopamine with the C51 configuration file. The resulting \texttt{CovariateShiftAgent} is contained in two files:
 \begin{itemize}
 	\item The agent class in \href{https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/covariate_shift_agent.py}{\texttt{dopamine/agents/covariate\_shift/covariate\_shift\_agent.py}}, inheriting from \texttt{rainbow\_agent.RainbowAgent}.
 	\item The replay buffer in \href{https://github.com/gbg141/dopamine/blob/master/dopamine/replay_memory/cs_replay_buffer.py}{\texttt{dopamine/replay\_memory/cs\_replay\_buffer.py}}, inheriting from \texttt{prioritized\_replay\_buffer.WrappedPrioritizedReplayBuffer}.
 \end{itemize}
 In addition, the configuration file 
 $$\href{https://github.com/gbg141/dopamine/blob/master/dopamine/agents/covariate_shift/configs/covariate_shift.gin}{\texttt{dopamine/agents/covariate\_shift/configs/covariate\_shift.gin}}$$
-allows us to easily control all hyper-parameter values of the agent.
+allows us to easily control all hyper-parameter values of the agent. For more technical information about the implementation, we refer to the \href{https://github.com/gbg141/dopamine/tree/master/docs}{API Documentation} of our repository, in which we detail each module, class and function that conforms this agent. 
 
-For more technical information about the implementation, we refer to the \href{https://github.com/gbg141/dopamine/tree/master/docs}{API Documentation} of our repository, in which we detail each module, class and function that conforms this agent. In the following subsections, we will describe the key points of our practical framework at a higher level of abstraction.
+In the following subsections, we will analyze the key points of our practical framework at a higher level of abstraction. First, we will describe the function approximation  that we use to get our distribution estimates. In the following section, we give account of the sampling process and the replay memory where we store them. Thirdly, we detail how we dealt with the different approximations associated to distributional settings; this facilitates us to finally present in the last two subsections the Categorical Distributional and Categorical Log-Distributional DCOP-TD algorithms, respectively, that we have implemented in our \texttt{CovariateShiftAgent}.
+
+
+
+\subsection{Non-linear Function Approximation}
+
+In our attempt to achieve the best experimental performance, we go beyond the defined theoretical framework by implementing a non-linear function approximation for getting ratio -or log-ratio- distribution estimates. This is a choice that prevent us from having any convergence guarantee, but it is again supported by the outstanding experimental behaviour of C51, which makes use of a non-linear neural network. In fact, in our implementation we augment the C51 network by adding an extra head, the distributional ratio model, to the final convolutional layer, whose role is to predict the corresponding (log-)ratio distribution. 
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{Model_Network}
+    \caption{Visual representation of the Neural Network implemented in \texttt{CovariateShiftAgent} working in the ALE environment.}
+    \label{fig:network}
+\end{figure}
+
+We can see in Figure \ref{fig:network} the model network architecture in detail when working with the ALE environment\cite{ALE}. Game frames are selected, grouped and preprocessed in the standard way, generating inputs which consist of a $84\times84\times4$ image. The following convolutional layers are exactly as the ones already defined in the DQN implementation\cite{DQN}:
+\begin{itemize}
+	\item The first hidden layer convolves 32 filters of $8\times8$ with stride 4 with the input image and applies a rectifier non-linearity -in particular, a ReLu\cite{ReLu}.
+	\item The second hidden layer convolves 64 filters of $4\times4$ with stride 2, again followed by a ReLu activation function.
+	\item The third and last convolutional layer convolves 64 filters of $3\times3$ with stride 1 and applies a ReLu rectifier as well, and the result is flattened.
+\end{itemize}
+At that point, our network is forked in two separate heads, each connected to the previous flattened layer:
+\begin{itemize}
+	\item On the one hand, we have the part responsible of predicting the Q value distributions, which we call the Q model. Just as the original distributional RL models\cite{DRL}, the final hidden layer is fully-connected and consists of 512 rectifier units, followed by a fully-connected linear layer with $| \A | \times N$ outputs, being $|A|$ the number of actions of the played game\footnote{The number of valid actions varied between 4 and 18 along the games of ALE environment.} and $N$ the number of fixed supports considered for the categorical Q distributions. This is re-arranged in $|A|$ groups of $N$ outputs, and applying to each of these groups of logits a Softmax layer we finally obtain the $N$ probabilities for each state-action pair.
+	\item On the other hand, we have added the previously mentioned ratio model, which provides us with estimates of the covariate shift (log-)ratio distributions. As in the Q model, the final hidden layer is fully-connected and consists of 512 rectifier units. This is followed by a fully-connected linear layer that produces as mani outputs as the number of atoms $M$ of the ratio parametric model. A final softmax layer transforms the resulting logits into probabilities. 
+\end{itemize}
+
+
+ONLINE AND TARGET NETWORKS!
+
+
+\subsection{Replay Memory}
+
+TODO:
+
+In this setup, the agent uses a replay memory (implemented as a windowed buffer) to store past experience, which it trains on continuously. As a result, much of the agent’s learning carries an off-policy flavor.
+
+We focus on a fixed behavior policy, specifically the uni- formly random policy. We are interested in learning as good of a control policy as we can. That is, at each step the tar- get policy is the greedy policy with respect to the predicted Q-values. While the theory we developed here applies to the policy evaluation case, we believe this setup to be a more practical and more stringent test of the idea. We emphasize that on the ALE, the uniformly random policy generates data that is significantly different from any learned policy; as a re- sult, our experiments exhibit a high degree of off-policyness. To the best of our knowledge, we are the first to consider such a drastic setting.
+
+In initial experiments we found that multiplicatively reweighting the loss function using covariate shifts hurt per- formance, likely due to larger gradient variance. Instead, to reweight sample transitions we use a prioritized replay mem- ory (Schaul et al. 2016) where priorities correspond to the approximate ratios of our model, which in expectation re- covers the reweighting. These adjusted sampling priorities result in large portions of the dataset being mostly ignored (i.e. those unlikely under policy PI); hence, the effective size of the data set is reduced and we risk overfitting. In our ex- periment we mitigated this effect by taking a larger replay memory size (10 million frames) than usual.
+
+Preliminary experiments showed that learning the ratio with prioritized sampling led to stability issues, hence we train the ratio model by sampling transitions uniformly from the replay memory. Each training step samples two indepen- dent transition batches, prioritized and uniform for the value function and covariate shift respectively.
+
+Since the training is done ”backwards in time”, no valid transition exists that would update the correction of an initial state s0. This is similar to how there is no valid transition that updates the value of the terminal state in an episodic MDP. However, the distribution of any initial state s0 is policy- independent, and so its ratio is 1. As a result, we modify the loss (9) for initial states by replacing the bootstrap tar- get with 1. A more detailed analysis of our method in the episodic case is provided in the supplementary material.
+
 
 \subsection{Distributional Setting}
 
@@ -1433,83 +1475,69 @@ The reasons behind our decision are purely practical; despite there is no conver
  
 
 
-\subsection{Non-linear Function Approximation}
-
-In our attempt to imitate C51 in order to achieve the best performance, we also 
 
 
 
 \subsection{Categorical Distributional DCOP-TD}
 
-Our baseline is the C51 distributional reinforcement learning agent\cite{DRL} within Dopamine framework \cite{dopamine}. We use published hyperparameters unless otherwise noted. We augment the C51 network by adding an extra head, the distributional ratio model $X(s)$, to the final convolutional layer, whose role is to predict the distribution of the ratio $d_\pi / d_\mu$ . This model consists of a two-layer fully-connected network, with as many outputs as the number of atoms $M$ of the parametric model. A final softmax layer transforms the resulting logits into probabilities. 
-
-Analogously to \cite{DRL}, we can attempt to model the CS ratio distribution through a discrete parametric distribution with a certain set of atoms $\{x_i\}_{0 \leq i<M}$, $M \in \mathbb{N}$, as its support. The atom probabilities would be given by a parametric model $\theta : \mathcal{X} \rightarrow \mathbb{R}^M$
-\begin{equation}
-    X_{\theta} (s) = x_i \quad w.p. \quad p_i(s) := f_{\theta}^i(s)
-\end{equation}
-
-The DCOP update $Y_{\hat{\gamma}}X_\theta$ and this parametrization $X_\theta$ almost always would have disjoint supports. This could be tackled in practice projecting the sample DCOP update $\hat{Y}_{\hat{\gamma}}X_\theta$ onto the support of $X_\theta$ (i.e. given a sample transition $(s,a,s')$, we compute the DCOP update $\hat{Y}_{\hat{\gamma}}x_j =  \frac{\pi(a|s)}{\mu(a|s)}x_j + (1-\hat{\gamma})$ for each atom $x_j$, then distribute its probability $p_j(s)$ to the immediate neighbours of $\hat{Y}_{\hat{\gamma}}x_j$).
-
-The corresponding pseudocode is detailed in Algorithm \ref{distCSalgorithm}, analogous to that of \cite{DRL}:
+TODO:
 
 \setlength{\algomargin}{1.5em}
 \SetAlCapHSkip{0em}
 \begin{algorithm}[H]
-\caption{Categorical CS Algorithm} \label{distCSalgorithm}
+\caption{Categorical Distributional DCOP-TD} \label{alg:CatDistDCOP-TD}
 \DontPrintSemicolon
 \SetKwComment{CustomComment}{\#}{}
-\SetKwInput{KwIn}{\hspace{-1.5em} input}
-\SetKwInput{KwOut}{\hspace{-1.5em} output}
-\KwIn{A transition $s_{t-1},a_{t-1},s_t$}
-    %$\frac{d_\pi}{d_\mu}(s_{t-1}) := \sum_i x_i p_i(s_{t-1})$\;
-    $m_i = 0$, $i\in \{0,\dots, M-1\}$\;
-    \For{$j\in \{0,\dots, M-1\}$}{
-        \CustomComment{Compute the projection $\tilde{T}x_j$ onto the support $\{x_i\}$}
-        $\tilde{T}x_j \leftarrow \left[ \hat{\gamma} \frac{\pi(a_{t-1}|s_{t-1})}{\mu(a_{t-1}|s_{t-1})} x_j + 1 - \hat{\gamma} \right]_{C_{min}}^{C_{max}}$\;
-        $b_j \leftarrow (\tilde{T}x_j -C_{min}) / \Delta x \quad$ \CustomComment{note that $b_j \in [0, M-1]$}
-        $l \leftarrow \lfloor b_j \rfloor$, $u \leftarrow \lceil b_j \rceil$\;
-        \CustomComment{Distribute probability of $\tilde{T}x_j$}
-        $m_l \leftarrow m_l + p_j(s_{t-1}) (u - b_j)$\;
-        $m_u \leftarrow m_u + p_j(s_{t-1}) (b_j - l)$\;
-    }
-\KwOut{Cross-entropy loss $-\sum_i m_i \log(p_i(s_t))$}
+\SetKwInput{KwIn}{\hspace{-1.5em} Input}
+\SetKwInput{KwOut}{\hspace{-1.5em} Output}
+\SetKwInOut{Require}{\hspace{-1.5em} Require}
+\Require{$Z_t(s,a) = \sum_{k=1}^K p_{t,k}(s,a) \delta_{z_k}$ for each $(s,a)$}
+\KwIn{A sample transition $(s_{t},a_{t}, r_t, s_{t+1})$}
+	\CustomComment{Compute distributional Bellman target}
+    \uIf{\textnormal{Categorical Policy Evaluation}}{
+    	$a^* \sim \pi(\cdot | s_{t+1})$ \;}
+    \ElseIf{\textnormal{Categorical Q-learning}}{
+    	$a^* \leftarrow \textnormal{arg max}_a Q(s_{t+1},a) $\;}
+    $\widehat{Z}_{*}(s_t,a_t) \leftarrow (f_{r_t,\gamma})_{\#} Z_t(s_{t+1},a^*)$\;
+    \CustomComment{Project target onto support}
+    $\widehat{Z}_{t}(s_t,a_t) \leftarrow \Pi_C \widehat{Z}_{*}(s_t,a_t)$\;
+    \CustomComment{Compute KL loss}
+    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{Z}_t (s_t,a_t) || Z_t (s_t,a_t) \right) $\; 
+    \textnormal{Generate new estimate }$Z_{t+1}(s_t,a_t) = \sum_{k=1}^{K} p_{t+1,k}(s_t,a_t) \delta_{z_k}$ \;
+\KwOut{Estimate $Z_{t+1}(s,a)$ for each $(s,a)$}
 
 \end{algorithm}
 
-Observations:
-\begin{itemize}
-    \item $C_{min}, C_{max} \in \R$ are the predefined lower and upper value limits of the covariate shift ratio. In this case, $C_{min} \geq 0$.
-    \item The support is evenly spaced in $[C_{min}, C_{max}]$; we consider the set of atoms $\{x_i = C_{min} + i \Delta x : 0 \leq i < M \}$, with $\Delta x = \frac{C_{max}-C_{min}}{M-1}$
-    \item The \textit{behavioural policy} $\mu$ is simply the uniformly random policy, so 
-    \begin{equation} \label{behaviourPolicy}
-        \mu(a|s) = \frac{1}{|\mathcal{A}|} \quad \forall a \in \mathcal{A}
-    \end{equation}
-    for any state $s \in \mathcal{S}$.
-    \item The \textit{target policy} $\pi$ is the $\epsilon$-greedy policy with respect to the estimated state-action values of the model. Hence,%expected value of the distribution output of the target network. Hence,
-    \begin{equation} \label{targetPolicy}
-        \pi_\theta (a|s) = 
-        \left\{ 
-            \begin{array}{lcc}
-                (1-\epsilon)+\epsilon \frac{1}{|\mathcal{A}|} &   \text{if} & a = \text{arg max}_a Q_\theta(s,a) \\
-                \epsilon \frac{1}{|\mathcal{A}|} &  \text{otherwise} &
-            \end{array}
-        \right. 
-    \end{equation}
-   for any state $s \in \mathcal{S}$.
-   \item Considering equations \ref{behaviourPolicy} and \ref{targetPolicy}, we have that
-   \begin{equation} \label{policyQuotient}
-        \frac{\pi_\theta (a|s)}{\mu(a|s)} = 
-        \left\{ 
-            \begin{array}{lcc}
-                |\mathcal{A}|(1-\epsilon)+\epsilon  &   \text{if} & a = \text{arg max}_a Q_\theta(s,a) \\
-                \epsilon  &  \text{otherwise} &
-            \end{array}
-        \right. 
-    \end{equation}
-\end{itemize}
-
 
 \subsection{Categorical Log-Distributional DCOP-TD}
+
+TODO:
+
+\setlength{\algomargin}{1.5em}
+\SetAlCapHSkip{0em}
+\begin{algorithm}[H]
+\caption{Categorical Log-Distributional DCOP-TD} \label{alg:CatLogDistDCOP-TD}
+\DontPrintSemicolon
+\SetKwComment{CustomComment}{\#}{}
+\SetKwInput{KwIn}{\hspace{-1.5em} Input}
+\SetKwInput{KwOut}{\hspace{-1.5em} Output}
+\SetKwInOut{Require}{\hspace{-1.5em} Require}
+\Require{$Z_t(s,a) = \sum_{k=1}^K p_{t,k}(s,a) \delta_{z_k}$ for each $(s,a)$}
+\KwIn{A sample transition $(s_{t},a_{t}, r_t, s_{t+1})$}
+	\CustomComment{Compute distributional Bellman target}
+    \uIf{\textnormal{Categorical Policy Evaluation}}{
+    	$a^* \sim \pi(\cdot | s_{t+1})$ \;}
+    \ElseIf{\textnormal{Categorical Q-learning}}{
+    	$a^* \leftarrow \textnormal{arg max}_a Q(s_{t+1},a) $\;}
+    $\widehat{Z}_{*}(s_t,a_t) \leftarrow (f_{r_t,\gamma})_{\#} Z_t(s_{t+1},a^*)$\;
+    \CustomComment{Project target onto support}
+    $\widehat{Z}_{t}(s_t,a_t) \leftarrow \Pi_C \widehat{Z}_{*}(s_t,a_t)$\;
+    \CustomComment{Compute KL loss}
+    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{Z}_t (s_t,a_t) || Z_t (s_t,a_t) \right) $\; 
+    \textnormal{Generate new estimate }$Z_{t+1}(s_t,a_t) = \sum_{k=1}^{K} p_{t+1,k}(s_t,a_t) \delta_{z_k}$ \;
+\KwOut{Estimate $Z_{t+1}(s,a)$ for each $(s,a)$}
+
+\end{algorithm}
 
 
 \newpage 
@@ -1706,6 +1734,9 @@ Our baseline is the C51 distributional reinforcement learning agent\cite{DRL} wi
 	\bibitem{analysisC51} Rowland, Mark, Bellemare, Marc G, Dabney, Will, Munos, Rémi, and Teh, Yee Whye. An analysis of categorical distributional reinforcement learning. In Proceedings of the International Conference on Artificial Intelligence and Statistics, 2018.
 	\bibitem{firstDistributional} Jaquette, Stratton C. Markov decision processes with a new opti- mality criterion: Discrete time. The Annals of Statistics, 1(3): 496–505, 1973.
 	\bibitem{ALE} Bellemare, Marc G, Naddaf, Yavar, Veness, Joel, and Bowling, Michael. The arcade learning environment: An evaluation plat- form for general agents. Journal of Artificial Intelligence Re- search, 47:253–279, 2013.
+	\bibitem{DQN} Mnih, V.; Kavukcuoglu, K.; Silver, D.; Rusu, A. A.; Veness, J.; Bellemare, M. G.; Graves, A.; Riedmiller, M.; Fidjeland, A. K.; Ostrovski, G.; Petersen, S.; Beattie, C.; Sadik, A.; Antonoglou, I.; King, H.; Kumaran, D.; Wierstra, D.; Legg, S; and Hassabis, D. 2015. Human-level control through deep reinforcement learning. Nature 518(7540):529–533.
+	\bibitem{ReLu} Nair, V. and Hinton, G. E. Rectified linear units improve restricted Boltzmann machines. Proc. Int. Conf. Mach. Learn. 807–814 (2010).
+	\bibitem{Rainbow} Hessel, Matteo, Modayil, Joseph, van Hasselt, Hado, Schaul, Tom, Ostrovski, Georg, Dabney, Will, Hor- gan, Dan, Piot, Bilal, Azar, Mohammad, and Silver, David. Rainbow: Combining improvements in deep reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence, 2018.
 
 
 
