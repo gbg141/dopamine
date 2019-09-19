@@ -748,6 +748,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     else:
       final_loss = loss
       update_priorities_op = tf.no_op()
+
+    if self.only_use_ratio_model:
+      priorities = self._u_replay_next_net_outputs.c_values
     
     with tf.control_dependencies([update_priorities_op]):
       if self.summary_writer is not None:
