@@ -1373,7 +1373,7 @@ In the following subsections, we will analyze the key points of our practical fr
 
 \subsection{Non-linear Function Approximation}
 
-In our attempt to achieve the best experimental performance, we go beyond the defined theoretical framework by implementing a non-linear function approximation for getting ratio -or log-ratio- distribution estimates. This is a choice that prevent us from having any convergence guarantee, but it is again supported by the outstanding experimental behaviour of C51, which makes use of a non-linear neural network. In fact, in our implementation we augment the C51 network by adding an extra head, the distributional ratio model, to the final convolutional layer, whose role is to predict the corresponding (log-)ratio distribution. 
+In our attempt to achieve the best experimental performance, we go beyond the defined theoretical framework by implementing a non-linear function approximation for getting ratio -or log-ratio- distribution estimates. This is a choice that prevent us from having any convergence guarantee, but it is supported by the outstanding experimental behaviour of C51\cite{DRL}, which makes use of a non-linear neural network. In fact, in our implementation we augment the original C51 network by adding an extra head, the distributional ratio model, to the final convolutional layer, whose role is to predict the corresponding (log-)ratio distribution. 
 
 \begin{figure}[h]
     \centering
@@ -1395,22 +1395,28 @@ At that point, our network is forked in two separate heads, each connected to th
 \end{itemize}
 
 
-ONLINE AND TARGET NETWORKS!
+Finally, we notice that we work with double networks\cite{DoubleNetworks} -i.e. the processes of selection and evaluation of the bootstrap action are decoupled, with online and target weights respectively; this is a usual method in Deep Reinforcement Learning that addresses a natural overestimation bias of Q-learning\cite{Double}. In our implementation, the update period for the target network is controlled by \texttt{target\_update\_period} parameter, whose value is set to $8000$ iterations just like the \texttt{RainbowAgent}\cite{Rainbow}.
+
+
 
 
 \subsection{Replay Memory}
 
-TODO:
+The implemented replay memory in Dopamine\cite{dopamine} is responsible of storing past transitions of the agent, acting as a windowed buffer from which training samples are drawn continuously. Consequently, there is always some degree of off-polyceness during the learning process given that the learned policy is being constantly updated.
 
-In this setup, the agent uses a replay memory (implemented as a windowed buffer) to store past experience, which it trains on continuously. As a result, much of the agent’s learning carries an off-policy flavor.
+In order to evaluate our model, however, we are interested in achieving a degree of off-polyceness as high as possible; thus, we consider the very hard setting proposed for testing the Discounted COP-TD algorithm\cite{DCOPTD}, in which:
+\begin{itemize}
+	\item We have a fixed behaviour policy $\mu$, the uniformly random policy;
+	\item At each step, the target policy $\pi$ is the $\epsilon$-greedy policy with respect to the predicted $Q$ estimates.
+\end{itemize}
+On ALE\cite{ALE}, this particular setup guarantees that the generated data is significantly different from any learned policy, as we want to.
 
-We focus on a fixed behavior policy, specifically the uni- formly random policy. We are interested in learning as good of a control policy as we can. That is, at each step the tar- get policy is the greedy policy with respect to the predicted Q-values. While the theory we developed here applies to the policy evaluation case, we believe this setup to be a more practical and more stringent test of the idea. We emphasize that on the ALE, the uniformly random policy generates data that is significantly different from any learned policy; as a re- sult, our experiments exhibit a high degree of off-policyness. To the best of our knowledge, we are the first to consider such a drastic setting.
+Taking the work of \cite{DCOPTD} as reference, to reweight sample transitions we have implemented a prioritized replay memory\cite{Prioritized} where priorities are simply covariate shift estimates. Nonetheless, this increases the risk of overfitting, since it reduces the effective size of the data set -those samples unlikely under policy $\pi$, which might be the vast majority due to the randomness of $\mu$, end up mostly ignored; to compensate this effect, the \texttt{replay\_capacity} is increased to $10$M frames.
 
-In initial experiments we found that multiplicatively reweighting the loss function using covariate shifts hurt per- formance, likely due to larger gradient variance. Instead, to reweight sample transitions we use a prioritized replay mem- ory (Schaul et al. 2016) where priorities correspond to the approximate ratios of our model, which in expectation re- covers the reweighting. These adjusted sampling priorities result in large portions of the dataset being mostly ignored (i.e. those unlikely under policy PI); hence, the effective size of the data set is reduced and we risk overfitting. In our ex- periment we mitigated this effect by taking a larger replay memory size (10 million frames) than usual.
+Authors of \cite{DCOPTD} also explain that stability issues arise when we learn the ratio with prioritized sampling. To overcome this, at each training step two independent transition batches are sampled from the replay buffer: prioritized for the value distribution, and uniform for the covariate shift ones. In both cases, the \texttt{batch\_size} is set to 32 in our experiments.
 
-Preliminary experiments showed that learning the ratio with prioritized sampling led to stability issues, hence we train the ratio model by sampling transitions uniformly from the replay memory. Each training step samples two indepen- dent transition batches, prioritized and uniform for the value function and covariate shift respectively.
+Last, but not least, we note that initial states cannot be updated through transition samples as the training of the ratio distributions is done 'backwards'. In these cases, given that the distribution of any initial state is policy-independent, their ratio is 1; in our implementation, we take this into account by replacing the bootstrapping target with a Dirac delta centered at 1.
 
-Since the training is done ”backwards in time”, no valid transition exists that would update the correction of an initial state s0. This is similar to how there is no valid transition that updates the value of the terminal state in an episodic MDP. However, the distribution of any initial state s0 is policy- independent, and so its ratio is 1. As a result, we modify the loss (9) for initial states by replacing the bootstrap tar- get with 1. A more detailed analysis of our method in the episodic case is provided in the supplementary material.
 
 
 \subsection{Distributional Setting}
@@ -1477,71 +1483,91 @@ The reasons behind our decision are purely practical; despite there is no conver
 
 
 
-
 \subsection{Categorical Distributional DCOP-TD}
 
-TODO:
+With all the main ingredients of our implementation already detailed in previous sections, we simply want to summarize the steps that conform our distributional DCOP-TD algorithms. To begin with, we show in Algorithm \ref{alg:CatDistDCOP-TD} the Categorical Distributional $\hat{\gamma}$-Discounted COP-TD main process, where 
+\begin{itemize}
+	\item $\{x_K\}$ is the set of atoms that define our categorical parametric family $\mathcal{P}$
+	\item we denote by $\theta$ and $\bar{\theta}$ the weights of the online and target networks, respectively;
+	\item $\{p_{{\theta}_{t},K}(s)\}$ and $\{p_{\bar{\theta}_{t},K}(s)\}$ are, respectively, the set of probability outputs of the online and target networks for a state $s\in \Sspace$ at a training time step $t$.
+	\item $\hat{\epsilon} \in [0,1]$ comes from the definition of the $\epsilon$-greedy policy $\pi_{\bar{\theta}}$; in practice, however, it can be controlled apart by  an extra hyper-parameter (\texttt{quotient\_epsilon}).
+	\item $(f_{a,b})_\#$ represents the application to each element of the support of an affine shift map $f_{a,b} : \R \rightarrow \R$ defined by $f_{a,b}(y) := a + b y$; in particular, note that $Y_{\hat{\gamma}}^D X(s) := (f_{\cdot,\hat{\gamma}\rho})_{\#} X(s)$
+\end{itemize}
+
+
+\vspace{\fill}
 
 \setlength{\algomargin}{1.5em}
 \SetAlCapHSkip{0em}
-\begin{algorithm}[H]
+\begin{algorithm}[h!]
 \caption{Categorical Distributional DCOP-TD} \label{alg:CatDistDCOP-TD}
 \DontPrintSemicolon
 \SetKwComment{CustomComment}{\#}{}
 \SetKwInput{KwIn}{\hspace{-1.5em} Input}
 \SetKwInput{KwOut}{\hspace{-1.5em} Output}
 \SetKwInOut{Require}{\hspace{-1.5em} Require}
-\Require{$Z_t(s,a) = \sum_{k=1}^K p_{t,k}(s,a) \delta_{z_k}$ for each $(s,a)$}
-\KwIn{A sample transition $(s_{t},a_{t}, r_t, s_{t+1})$}
-	\CustomComment{Compute distributional Bellman target}
-    \uIf{\textnormal{Categorical Policy Evaluation}}{
-    	$a^* \sim \pi(\cdot | s_{t+1})$ \;}
-    \ElseIf{\textnormal{Categorical Q-learning}}{
-    	$a^* \leftarrow \textnormal{arg max}_a Q(s_{t+1},a) $\;}
-    $\widehat{Z}_{*}(s_t,a_t) \leftarrow (f_{r_t,\gamma})_{\#} Z_t(s_{t+1},a^*)$\;
+\Require{Estimates $X_{{\theta}_{t}}(s) = \sum_{k=1}^K p_{{\theta}_{t},k}(s) \delta_{x_k}$ and $X_{\bar{\theta}_{t}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t},k}(s) \delta_{x_k}$ for each $s\in\Sspace$}
+\KwIn{A sample transition $(s_{i},a_{i}, s_{i+1})$}
+	\CustomComment{Compute policy ratio}
+    \uIf{$a_t =  \textnormal{arg max}_a Q_{\bar{\theta}}(s_{i},a)$ }{
+    	$\rho_i \leftarrow |\mathcal{A}|(1-\hat{\epsilon})+\hat{\epsilon} $ \;}
+    \Else{
+    	$\rho_i \leftarrow \hat{\epsilon} / |\mathcal{A}| $ \;}
+    \CustomComment{Compute distributional ratio target}
+    $\widehat{X}_{*}(s_{i+1}) \leftarrow Y_{\hat{\gamma}}^D X_{\bar{\theta}_{t}}(s_i)$\;
     \CustomComment{Project target onto support}
-    $\widehat{Z}_{t}(s_t,a_t) \leftarrow \Pi_C \widehat{Z}_{*}(s_t,a_t)$\;
+    $\widehat{X}_{t}(s_{i+1}) \leftarrow \Pi_C \widehat{X}_{*}(s_{i+1})$\;
     \CustomComment{Compute KL loss}
-    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{Z}_t (s_t,a_t) || Z_t (s_t,a_t) \right) $\; 
-    \textnormal{Generate new estimate }$Z_{t+1}(s_t,a_t) = \sum_{k=1}^{K} p_{t+1,k}(s_t,a_t) \delta_{z_k}$ \;
-\KwOut{Estimate $Z_{t+1}(s,a)$ for each $(s,a)$}
+    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{X}_{t}(s_{i+1}) || X_{{\theta}_{t}}(s_{i+1}) \right) $\; 
+    \textnormal{Update online weights }${\theta}_{t+1} $\; 
+    \CustomComment{Update target network if required}
+    $\bar{\theta}_{t+1} \leftarrow {\theta}_{t+1}$ \textbf{ if } $t \ \% \ $\texttt{target\_update\_period}$\ =0$ \textbf{ else } $\bar{\theta}_{t}$\;
+\KwOut{New estimates $X_{{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{{\theta}_{t+1},k}(s) \delta_{x_k}$ and $X_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k}(s) \delta_{x_k}$ for each $s \in \Sspace$ \linebreak 
+	Ratio estimates $c_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k} (s) x_k$  }
 
 \end{algorithm}
 
+\clearpage
 
 \subsection{Categorical Log-Distributional DCOP-TD}
 
-TODO:
+Finally, we present in Algorithm \ref{alg:CatLogDistDCOP-TD} the sketch of our Categorical Log-Distributional DCOP-TD algorithm. The observations made in previous Section apply here, where now $\{w_K\}$ is the support and $G_{\hat{\gamma}} W(s) =$ $(f_{\log(\rho),\hat{\gamma}})_{\#} W(s)$. In fact, as one can easily see, the steps are equivalent to those of the multiplicative case.
+
+
 
 \setlength{\algomargin}{1.5em}
 \SetAlCapHSkip{0em}
-\begin{algorithm}[H]
+\begin{algorithm}[h!]
 \caption{Categorical Log-Distributional DCOP-TD} \label{alg:CatLogDistDCOP-TD}
 \DontPrintSemicolon
 \SetKwComment{CustomComment}{\#}{}
 \SetKwInput{KwIn}{\hspace{-1.5em} Input}
 \SetKwInput{KwOut}{\hspace{-1.5em} Output}
 \SetKwInOut{Require}{\hspace{-1.5em} Require}
-\Require{$Z_t(s,a) = \sum_{k=1}^K p_{t,k}(s,a) \delta_{z_k}$ for each $(s,a)$}
-\KwIn{A sample transition $(s_{t},a_{t}, r_t, s_{t+1})$}
-	\CustomComment{Compute distributional Bellman target}
-    \uIf{\textnormal{Categorical Policy Evaluation}}{
-    	$a^* \sim \pi(\cdot | s_{t+1})$ \;}
-    \ElseIf{\textnormal{Categorical Q-learning}}{
-    	$a^* \leftarrow \textnormal{arg max}_a Q(s_{t+1},a) $\;}
-    $\widehat{Z}_{*}(s_t,a_t) \leftarrow (f_{r_t,\gamma})_{\#} Z_t(s_{t+1},a^*)$\;
+\Require{Estimates $W_{{\theta}_{t}}(s) = \sum_{k=1}^K p_{{\theta}_{t},k}(s) \delta_{x_k}$ and $W_{\bar{\theta}_{t}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t},k}(s) \delta_{x_k}$ for each $s\in\Sspace$}
+\KwIn{A sample transition $(s_{i},a_{i}, s_{i+1})$}
+	\CustomComment{Compute the log policy ratio}
+    \uIf{$a_t =  \textnormal{arg max}_a Q_{\bar{\theta}}(s_{i},a)$ }{
+    	$\log (\rho_i) \leftarrow \log \left( |\mathcal{A}|(1-\hat{\epsilon})+\hat{\epsilon} \right) $ \;}
+    \Else{
+    	$\log (\rho_i) \leftarrow \left(\hat{\epsilon} / |\mathcal{A}| \right)$ \;}
+    \CustomComment{Compute distributional log-ratio target}
+    $\widehat{W}_{*}(s_{i+1}) \leftarrow (f_{\log (\rho_i),\hat{\gamma}})_{\#} W_{\bar{\theta}_{t}}(s_i)$\;
     \CustomComment{Project target onto support}
-    $\widehat{Z}_{t}(s_t,a_t) \leftarrow \Pi_C \widehat{Z}_{*}(s_t,a_t)$\;
+    $\widehat{W}_{t}(s_{i+1}) \leftarrow \Pi_C \widehat{W}_{*}(s_{i+1})$\;
     \CustomComment{Compute KL loss}
-    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{Z}_t (s_t,a_t) || Z_t (s_t,a_t) \right) $\; 
-    \textnormal{Generate new estimate }$Z_{t+1}(s_t,a_t) = \sum_{k=1}^{K} p_{t+1,k}(s_t,a_t) \delta_{z_k}$ \;
-\KwOut{Estimate $Z_{t+1}(s,a)$ for each $(s,a)$}
-
+    \textnormal{Find gradient }$ \textnormal{KL} \left( \widehat{W}_{t}(s_{i+1}) || W_{{\theta}_{t}}(s_{i+1}) \right) $\; 
+    \textnormal{Update online weights }${\theta}_{t+1} $\; 
+    \CustomComment{Update target network if required}
+    $\bar{\theta}_{t+1} \leftarrow {\theta}_{t+1}$ \textbf{ if } $t \ \% \ $\texttt{target\_update\_period}$\ =0$ \textbf{ else } $\bar{\theta}_{t}$\;
+\KwOut{New estimates $W_{{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{{\theta}_{t+1},k}(s) \delta_{x_k}$ and $W_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k}(s) \delta_{x_k}$ for each $s \in \Sspace$  \linebreak 
+	Ratio estimates $c_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k} (s) \exp (w_k)$ }
 \end{algorithm}
+
+We note that we can easily get covariate shift estimates -which we recall are used as priorities for training the $Q$ model- by exponentiating log-ratio distributions and taking its mean; in practice, as the support is fixed, we simply compute the exponentiated support at the beginning, and compute its weighted mean by the corresponding probabilities of log-ratio distributions.
 
 
 \newpage 
-
 \thispagestyle{plain}
 \section{Evaluation of the Proposal}
 
@@ -1737,6 +1763,9 @@ Our baseline is the C51 distributional reinforcement learning agent\cite{DRL} wi
 	\bibitem{DQN} Mnih, V.; Kavukcuoglu, K.; Silver, D.; Rusu, A. A.; Veness, J.; Bellemare, M. G.; Graves, A.; Riedmiller, M.; Fidjeland, A. K.; Ostrovski, G.; Petersen, S.; Beattie, C.; Sadik, A.; Antonoglou, I.; King, H.; Kumaran, D.; Wierstra, D.; Legg, S; and Hassabis, D. 2015. Human-level control through deep reinforcement learning. Nature 518(7540):529–533.
 	\bibitem{ReLu} Nair, V. and Hinton, G. E. Rectified linear units improve restricted Boltzmann machines. Proc. Int. Conf. Mach. Learn. 807–814 (2010).
 	\bibitem{Rainbow} Hessel, Matteo, Modayil, Joseph, van Hasselt, Hado, Schaul, Tom, Ostrovski, Georg, Dabney, Will, Hor- gan, Dan, Piot, Bilal, Azar, Mohammad, and Silver, David. Rainbow: Combining improvements in deep reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence, 2018.
+	\bibitem{DoubleNetworks} van Hasselt, H.; Guez, A.; and Silver, D. 2016. Deep re- inforcement learning with double Q-learning. In Proc. of AAAI, 2094–2100.
+	\bibitem{Double} van Hasselt, H. 2010. Double Q-learning. In Advances in Neural Information Processing Systems 23, 2613–2621.
+	\bibitem{Prioritized} Schaul, T.; Quan, J.; Antonoglou, I.; and Silver, D. 2016. Prioritized experience replay. In International Conference on Learning Representations.
 
 
 
