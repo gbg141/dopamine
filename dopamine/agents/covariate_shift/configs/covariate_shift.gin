@@ -45,7 +45,7 @@ CovariateShiftAgent.freeze_replay_memory = False
 CovariateShiftAgent.only_use_ratio_model = True
 CovariateShiftAgent.target_greedy_policy = False
 CovariateShiftAgent.check_ratio = True
-CovariateShiftAgent.steps_to_change_policy = 1000000
+CovariateShiftAgent.steps_to_change_policy = 10
 CovariateShiftAgent.epsilon_first_policy = 0.1
 CovariateShiftAgent.epsilon_second_policy = 1.0
 

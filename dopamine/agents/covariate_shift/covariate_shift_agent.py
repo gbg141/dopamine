@@ -88,7 +88,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                only_use_ratio_model=True,
                target_greedy_policy=False,
                check_ratio=True,
-               on_policy=True,
                steps_to_change_policy=1000000,
                epsilon_first_policy=0.1,
                epsilon_second_policy=1.0,
@@ -231,7 +230,6 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.target_greedy_policy = target_greedy_policy
     self.check_ratio = check_ratio
     self.use_fixed_network = True if check_ratio and only_use_ratio_model else False
-    self.on_policy = tf.placeholder(tf.bool, name='on_policy')
     self.change_behaviour_policy = True if self.check_ratio else False
     self.steps_to_change_policy = steps_to_change_policy + min_replay_history
     self.epsilon_first_policy = epsilon_first_policy
@@ -297,7 +295,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     return action
 
   def _store_transition(self, last_observation, action, reward, is_terminal, 
-                        is_beginning=None, priority=None):
+                        is_beginning=None, priority=None, prob_action=None):
     """Stores an experienced transition, extended by the internal state is_beginning.
 
     Args:
@@ -308,10 +306,11 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     """
     if not self.freeze_replay_memory:
       is_beginning = is_beginning if is_beginning else self.is_beginning
+      prob_action = prob_action if prob_action else self.prob_action
       if priority is None:
-        priority = self._replay.memory.sum_tree.max_recorded_priority
+        priority = 1.0 #self._replay.memory.sum_tree.max_recorded_priority
       
-      self._replay.add(last_observation, action, reward, is_terminal, is_beginning, priority)
+      self._replay.add(last_observation, action, reward, is_terminal, is_beginning, prob_action, priority)
     self.is_beginning = False
 
   def _get_network_type(self):
@@ -416,7 +415,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         use_staging=use_staging,
         update_horizon=self.update_horizon,
         gamma=self.gamma,
-        extra_storage_types=[ReplayElement('beginning', (), np.bool)])
+        extra_storage_types=[ReplayElement('beginning', (), np.bool), ReplayElement('prob_action', (), np.double)])
 
   def _select_action(self):
     """Select an action from the set of available actions.
@@ -446,12 +445,16 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             self.training_steps,
             self.min_replay_history,
             self.epsilon_train)
+    argmax_action = self._sess.run(self._q_argmax, {self.state_ph: self.state})
     if random.random() <= epsilon:
       # Choose a random action with probability epsilon.
-      return random.randint(0, self.num_actions - 1)
+      action = random.randint(0, self.num_actions - 1)
     else:
       # Choose the action with highest Q-value at the current state.
-      return self._sess.run(self._q_argmax, {self.state_ph: self.state})
+      action = argmax_action
+    prob_action = (1-epsilon)+epsilon/self.num_actions if action == argmax_action else epsilon/self.num_actions
+    self.prob_action = prob_action
+    return action
 
   def _train_step(self):
     """Runs a single training step.
@@ -477,12 +480,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
         self._sess.run(self._train_op, 
-                    feed_dict={self.quotient_epsilon: quotient_epsilon, self.on_policy: self.change_behaviour_policy})
+                    feed_dict={self.quotient_epsilon: quotient_epsilon})
         if (self.summary_writer is not None and
             self.training_steps > 0 and
             self.training_steps % self.summary_writing_frequency == 0):
           summary = self._sess.run(self._merged_summaries, 
-                        feed_dict={self.quotient_epsilon: quotient_epsilon, self.on_policy: self.change_behaviour_policy})
+                        feed_dict={self.quotient_epsilon: quotient_epsilon})
           self.summary_writer.add_summary(summary, self.training_steps)
 
       if self.training_steps % self.target_update_period == 0:
@@ -547,12 +550,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     bundle_dictionary['training_steps'] = self.training_steps
     return bundle_dictionary
   
+  '''
   def compute_policies_quotient(self):
-    '''Computes the quotient of policies that appears at the DCOP update
-
-    Returns:
-      policies_quotient: tf.tensor, the quotient from the replay
-    '''
     batch_size = self._replay.batch_size
     
     with tf.name_scope('policies_quotient'):
@@ -580,6 +579,46 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       policies_quotient = tf.where(coincidences, coincidence_quotient, no_coincidence_quotient, name='quotient')
 
       policies_quotient = tf.cond(self.on_policy, lambda: tf.ones(tf.shape(policies_quotient), tf.float32), lambda: policies_quotient)
+
+    return policies_quotient
+  '''
+
+  def compute_policies_quotient(self):
+    '''Computes the quotient of policies that appears at the DCOP update
+    using stored action probabilities
+
+    Returns:
+      policies_quotient: tf.tensor, the quotient from the replay
+    '''
+    batch_size = self._replay.batch_size
+    
+    with tf.name_scope('policies_quotient'):
+      if self.target_greedy_policy:
+        qt_argmax_actions = tf.random.uniform([batch_size],minval=0,maxval=self.num_actions,
+                                  dtype=tf.int32, name='qt_argmax_actions')
+      else:
+        if self.use_fixed_network:
+          qt_argmax_actions = tf.argmax(self._u_replay_fixed_net_outputs.q_values, 
+                                      axis=1, output_type=tf.int32, name='qt_argmax_actions')
+        else:
+          qt_argmax_actions = tf.argmax(self._u_replay_target_net_outputs.q_values, 
+                                    axis=1, output_type=tf.int32, name='qt_argmax_actions')
+      replay_actions = self._replay.uniform_transition['action']
+      
+      coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
+
+      #with tf.control_dependencies([initialize_epsilon]):
+      coincidence_probs = tf.fill([batch_size,1], (1.0 - self.epsilon_train ) 
+                                      + self.epsilon_train / self.num_actions, 
+                                      name='coincidence_probs')
+      no_coincidence_probs = tf.fill([batch_size,1], self.epsilon_train / self.num_actions,
+                                          name='no_coincidence_probs')
+
+      target_policy_probs = tf.where(coincidences, coincidence_probs, no_coincidence_probs, name='quotient')
+
+      behaviour_policy_probs = tf.reshape(self._replay.uniform_transition['prob_action'], tf.shape(target_policy_probs))
+
+      policies_quotient = tf.divide(tf.cast(behaviour_policy_probs, tf.float32), target_policy_probs)
 
     return policies_quotient
 
@@ -765,10 +804,15 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             mean, var = tf.nn.moments(priorities, axes=[0])
             max_priority = tf.reduce_max(priorities)
             min_priority = tf.reduce_min(priorities)
+            reciprocal_priorities = tf.reciprocal(priorities)
+            offpolicyness = tf.where(priorities > 1.0, priorities, reciprocal_priorities)
+            meanoff, varoff = tf.nn.moments(offpolicyness, axes=[0])
             tf.summary.scalar('MeanPriorities', mean)
             tf.summary.scalar('VarPriorities', var)
             tf.summary.scalar('MaxPriorities', max_priority)
             tf.summary.scalar('MinPriorities', min_priority)
+            tf.summary.scalar('MeanOffpolicyness', meanoff)
+            tf.summary.scalar('VarOffpolicyness', varoff)
             tf.summary.text('Values', tf.as_string(priorities))
           with tf.variable_scope('Histograms'):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
