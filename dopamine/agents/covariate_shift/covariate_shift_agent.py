@@ -445,7 +445,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             self.training_steps,
             self.min_replay_history,
             self.epsilon_train)
-    self.quotient_epsilon = epsilon 
+    self.effective_epsilon = epsilon 
     argmax_action = self._sess.run(self._q_argmax, {self.state_ph: self.state})
     if random.random() <= epsilon:
       # Choose a random action with probability epsilon.
@@ -477,6 +477,9 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
                           self.final_quotient_epsilon)
     else:
       quotient_epsilon = self.final_quotient_epsilon
+
+    if self.check_ratio:
+      quotient_epsilon = self.effective_epsilon
 
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
