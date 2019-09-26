@@ -445,6 +445,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             self.training_steps,
             self.min_replay_history,
             self.epsilon_train)
+    self.quotient_epsilon = epsilon 
     argmax_action = self._sess.run(self._q_argmax, {self.state_ph: self.state})
     if random.random() <= epsilon:
       # Choose a random action with probability epsilon.
@@ -608,19 +609,19 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
       coincidences = tf.equal(qt_argmax_actions, replay_actions, name='coincidences')
 
       #with tf.control_dependencies([initialize_epsilon]):
-      coincidence_probs = tf.fill([batch_size,1], (1.0 - self.epsilon_train ) 
-                                      + self.epsilon_train / self.num_actions, 
+      coincidence_probs = tf.fill([batch_size,1], (1.0 - self.quotient_epsilon ) 
+                                      + self.quotient_epsilon / self.num_actions, 
                                       name='coincidence_probs')
-      no_coincidence_probs = tf.fill([batch_size,1], self.epsilon_train / self.num_actions,
+      no_coincidence_probs = tf.fill([batch_size,1], self.quotient_epsilon / self.num_actions,
                                           name='no_coincidence_probs')
 
       target_policy_probs = tf.where(coincidences, coincidence_probs, no_coincidence_probs, name='quotient')
 
       behaviour_policy_probs = tf.reshape(self._replay.uniform_transition['prob_action'], tf.shape(target_policy_probs))
 
-      policies_quotient = tf.divide(tf.cast(behaviour_policy_probs, tf.float32), target_policy_probs)
+      self.policies_quotient = tf.divide(target_policy_probs, tf.cast(behaviour_policy_probs, tf.float32))
 
-    return policies_quotient
+    return self.policies_quotient
 
   def _build_target_c_distribution(self):
     """Builds the c ratio target distribution.
@@ -814,6 +815,8 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             tf.summary.scalar('MeanOffpolicyness', meanoff)
             tf.summary.scalar('VarOffpolicyness', varoff)
             tf.summary.text('Values', tf.as_string(priorities))
+            quotientmean = tf.reduce_mean(tf.reshape(self.policies_quotient, tf.shape(priorities)))
+            tf.summary.scalar('MeanQuotient', quotientmean)
           with tf.variable_scope('Histograms'):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
             tf.summary.histogram('c_logits', c_logits[0,:])
