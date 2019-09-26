@@ -175,6 +175,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     self.final_quotient_epsilon = quotient_epsilon
     self.quotient_epsilon_decay_period = quotient_epsilon_decay_period
     self.quotient_epsilon = tf.placeholder(tf.float32, name='quotient_epsilon')
+    self.effective_epsilon = epsilon_first_policy
     self.use_loss_weights = use_loss_weights
     self.log_ratio_approach = log_ratio_approach
     self.use_ratio_exp_bins = use_ratio_exp_bins
