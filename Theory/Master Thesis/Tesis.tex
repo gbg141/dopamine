@@ -1544,7 +1544,7 @@ Finally, we present in Algorithm \ref{alg:CatLogDistDCOP-TD} the sketch of our C
 \SetKwInput{KwIn}{\hspace{-1.5em} Input}
 \SetKwInput{KwOut}{\hspace{-1.5em} Output}
 \SetKwInOut{Require}{\hspace{-1.5em} Require}
-\Require{Estimates $W_{{\theta}_{t}}(s) = \sum_{k=1}^K p_{{\theta}_{t},k}(s) \delta_{x_k}$ and $W_{\bar{\theta}_{t}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t},k}(s) \delta_{x_k}$ for each $s\in\Sspace$}
+\Require{Estimates $W_{{\theta}_{t}}(s) = \sum_{k=1}^K p_{{\theta}_{t},k}(s) \delta_{w_k}$ and $W_{\bar{\theta}_{t}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t},k}(s) \delta_{w_k}$ for each $s\in\Sspace$}
 \KwIn{A sample transition $(s_{i},a_{i}, s_{i+1})$}
 	\CustomComment{Compute the log policy ratio}
     \uIf{$a_t =  \textnormal{arg max}_a Q_{\bar{\theta}}(s_{i},a)$ }{
@@ -1560,7 +1560,7 @@ Finally, we present in Algorithm \ref{alg:CatLogDistDCOP-TD} the sketch of our C
     \textnormal{Update online weights }${\theta}_{t+1} $\; 
     \CustomComment{Update target network if required}
     $\bar{\theta}_{t+1} \leftarrow {\theta}_{t+1}$ \textbf{ if } $t \ \% \ $\texttt{target\_update\_period}$\ =0$ \textbf{ else } $\bar{\theta}_{t}$\;
-\KwOut{New estimates $W_{{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{{\theta}_{t+1},k}(s) \delta_{x_k}$ and $W_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k}(s) \delta_{x_k}$ for each $s \in \Sspace$  \linebreak 
+\KwOut{New estimates $W_{{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{{\theta}_{t+1},k}(s) \delta_{w_k}$ and $W_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k}(s) \delta_{w_k}$ for each $s \in \Sspace$  \linebreak 
 	Ratio estimates $c_{\bar{\theta}_{t+1}}(s) = \sum_{k=1}^K p_{\bar{\theta}_{t+1},k} (s) \exp (w_k)$ }
 \end{algorithm}
 
@@ -1571,21 +1571,70 @@ We note that we can easily get covariate shift estimates -which we recall are us
 \thispagestyle{plain}
 \section{Evaluation of the Proposal}
 
+\begin{itemize}
+	\item Importance of Ratio Intervals
+	\item Computational cost: limited fine-tuning, 100 iterations max
+	\item Weight loss
+	\item Summary of section
+\end{itemize}
 
-\subsection*{Importance of Ratio Intervals}
 
 
 
-\subsection*{Linear vs Exponential Bins}
+\subsection*{Linear vs Exponential Bins in Multiplicative case}
 
+Abliation Seaquest:
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{multiplicativeExpBins}
+    \caption{multiplicativeExpBins}
+    \label{fig:multiplicativeExpBins}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{multiplicativeExpBinsProcess}
+    \caption{multiplicativeExpBinsProcess}
+    \label{fig:multiplicativeExpBinsProcess}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{multiplicativeLinBins}
+    \caption{multiplicativeLinBins}
+    \label{fig:multiplicativeLinBins}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{multiplicativeLinBinsProcess}
+    \caption{multiplicativeLinBinsProcess}
+    \label{fig:multiplicativeLinBinsProcess}
+\end{figure}
+
+\clearpage
 
 \subsection*{Log-Distributional Approach}
 
 
 \subsection*{Qualitative Evaluation of the Learned Ratios}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{MaxBreakout}
+    \caption{MaxBreakout}
+    \label{fig:MaxBreakout}
+\end{figure}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{MinBreakout}
+    \caption{MinBreakout}
+    \label{fig:MinBreakout}
+\end{figure}
 
+\clearpage
 
 \newpage
 
