@@ -20,7 +20,7 @@ CovariateShiftAgent.tf_device = '/gpu:0' #'/gpu:0', or '/cpu:*' for non-GPU vers
 CovariateShiftAgent.max_tf_checkpoints_to_keep = 2
 CovariateShiftAgent.optimizer = @tf.train.AdamOptimizer()
 CovariateShiftAgent.summary_writer = True
-CovariateShiftAgent.summary_writing_frequency = 5000
+CovariateShiftAgent.summary_writing_frequency = 1000
 CovariateShiftAgent.use_ratio_model = True
 CovariateShiftAgent.use_priorities = True
 CovariateShiftAgent.update_beginning_priorities = True
@@ -47,7 +47,7 @@ CovariateShiftAgent.target_greedy_policy = False
 CovariateShiftAgent.check_ratio = True
 CovariateShiftAgent.steps_to_change_policy = 950000
 CovariateShiftAgent.epsilon_first_policy = 0.1
-CovariateShiftAgent.epsilon_second_policy = 1.0
+CovariateShiftAgent.epsilon_second_policy = 0.75
 
 tf.train.AdamOptimizer.learning_rate = 0.00025
 tf.train.AdamOptimizer.epsilon = 0.0003125

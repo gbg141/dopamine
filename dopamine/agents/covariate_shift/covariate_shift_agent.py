@@ -432,7 +432,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
     else:
       if self.check_ratio:
         if self.change_behaviour_policy:
-          if self.training_steps < self.steps_to_change_policy:
+          if self.training_steps <= self.steps_to_change_policy:
             epsilon = self.epsilon_first_policy
           else:
             tf.logging.info('Changing to random behaviour policy')
@@ -441,11 +441,12 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         else:
           epsilon = self.epsilon_second_policy
       else:
-        epsilon = self.epsilon_fn(
-            self.epsilon_decay_period,
-            self.training_steps,
-            self.min_replay_history,
-            self.epsilon_train)
+        epsilon = self.epsilon_second_policy
+        #epsilon = self.epsilon_fn(
+        #    self.epsilon_decay_period,
+        #    self.training_steps,
+        #    self.min_replay_history,
+        #    self.epsilon_train)
     self.effective_epsilon = epsilon 
     argmax_action = self._sess.run(self._q_argmax, {self.state_ph: self.state})
     if random.random() <= epsilon:
@@ -548,7 +549,7 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
         os.path.join(checkpoint_dir, 'tf_ckpt'),
         global_step=iteration_number)
     # Checkpoint the out-of-graph replay buffer.
-    if not self.freeze_replay_memory:
+    if not self.freeze_replay_memory or self.check_ratio:
       self._replay.save(checkpoint_dir, iteration_number)
     bundle_dictionary = {}
     bundle_dictionary['state'] = self.state
@@ -795,11 +796,14 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
 
     if self.only_use_ratio_model:
       priorities = self._u_replay_next_net_outputs.c_values
+
+    projected_priorities = tf.reduce_sum(self._ratio_support*self.c_target_distribution, axis=1)
     
     with tf.control_dependencies([update_priorities_op]):
       if self.summary_writer is not None:
         with tf.variable_scope('Losses'):
-          tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(final_loss))
+          if not self.check_ratio:
+            tf.summary.scalar('CrossEntropyLoss', tf.reduce_mean(final_loss))
           if self.use_ratio_model:
             tf.summary.scalar('MeanRatioLoss', tf.reduce_mean(c_loss))
           if not self.only_use_ratio_model:
@@ -812,15 +816,30 @@ class CovariateShiftAgent(rainbow_agent.RainbowAgent):
             reciprocal_priorities = tf.reciprocal(priorities)
             offpolicyness = tf.where(priorities > 1.0, priorities, reciprocal_priorities)
             meanoff, varoff = tf.nn.moments(offpolicyness, axes=[0])
-            tf.summary.scalar('MeanPriorities', mean)
-            tf.summary.scalar('VarPriorities', var)
-            tf.summary.scalar('MaxPriorities', max_priority)
-            tf.summary.scalar('MinPriorities', min_priority)
-            tf.summary.scalar('MeanOffpolicyness', meanoff)
-            tf.summary.scalar('VarOffpolicyness', varoff)
-            tf.summary.text('Values', tf.as_string(priorities))
+            tf.summary.scalar('PrioritiesMean', mean)
+            tf.summary.scalar('PrioritiesVar', var)
+            tf.summary.scalar('PrioritiesMax', max_priority)
+            tf.summary.scalar('PrioritiesMin', min_priority)
+            tf.summary.scalar('Offpolicyness', meanoff)
+            tf.summary.scalar('OffpolicynessVar', varoff)
+            mean, var = tf.nn.moments(projected_priorities, axes=[0])
+            max_priority = tf.reduce_max(projected_priorities)
+            min_priority = tf.reduce_min(projected_priorities)
+            reciprocal_priorities = tf.reciprocal(projected_priorities)
+            offpolicyness = tf.where(priorities > 1.0, projected_priorities, reciprocal_priorities)
+            meanoff, varoff = tf.nn.moments(offpolicyness, axes=[0])
+            tf.summary.scalar('ProjectedPrioritiesMean', mean)
+            tf.summary.scalar('ProjectedPrioritiesVar', var)
+            tf.summary.scalar('ProjectedPrioritiesMax', max_priority)
+            tf.summary.scalar('ProjectedPrioritiesMin', min_priority)
+            tf.summary.scalar('ProjectedOffpolicyness', meanoff)
+            tf.summary.scalar('ProjectedOffpolicynessVar', varoff)
+            #Quotient
             quotientmean = tf.reduce_mean(tf.reshape(self.policies_quotient, tf.shape(priorities)))
-            tf.summary.scalar('MeanQuotient', quotientmean)
+            tf.summary.scalar('Quotient', quotientmean)
+            #Text
+            tf.summary.text('Values', tf.as_string(priorities))
+            tf.summary.text('ProjectedValues', tf.as_string(projected_priorities))
           with tf.variable_scope('Histograms'):
             tf.summary.histogram('c_dist', c_target_distribution[0,:])
             tf.summary.histogram('c_logits', c_logits[0,:])
