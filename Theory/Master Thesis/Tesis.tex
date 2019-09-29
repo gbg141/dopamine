@@ -145,11 +145,11 @@
 
 \section*{Abstract}
 
-Temporal Difference Learning algorithms classically learn value functions (sum of discounted rewards) by solving for the fixed point that relates the value of one state with the expected value of the following states. Other TD learning algorithms have been used to learn \textit{multiplicative value functions}, which also have a fixed point solution. An example of such a function is the ratio between stationary distributions of two policies. It has been shown that learning of these multiplicative value functions suffers from higher variance and looser convergence guarantees. One potential approach to solving this issues would be to learn in log space, turning the multiplicative value function into an additive one. Unfortunately, it is easy to show with Jensen's inequality that the exponential of the log fixed point does not correspond to the multiplicative fixed point.
+Temporal Difference (TD) Learning algorithms classically learn value functions (sum of discounted rewards) by solving for the fixed point that relates the value of one state with the expected value of the following states. Other TD learning algorithms have been used to learn \textit{multiplicative value functions}, which also have a fixed point solution. An example of such a function is the ratio between stationary distributions of two policies. It has been shown that learning of these multiplicative value functions suffers from higher variance and looser convergence guarantees than additive ones. One potential approach to solving these issues would be to learn in log space, turning the multiplicative value function into an additive one. Unfortunately, it is easy to show with Jensen's inequality that the exponential of the log fixed point does not correspond to the multiplicative fixed point.
 
-Distributional RL has been used to learn the return distribution (return is the sum of future discounted rewards). Although it has been shown that it mainly plays an auxiliary task role for representation learning, we propose that distributional fixed points could play a much more fundamental role to learning non additive value functions. In the case of multiplicative value distributions, learning the additive fixed point in log space and exponentiating leads to the correct solution.
+Distributional Reinforcement Learning (RL) has been used to learn the return distribution (return is the sum of future discounted rewards). Although it has been shown that it mainly plays an auxiliary task role for representation learning, we propose that distributional fixed points could play a much more fundamental role to learning non additive value functions. In the case of multiplicative value distributions, learning the additive fixed point in log space and exponentiating leads to the correct solution.
 
-In particular, we will study this approach in the case of the learning process of the Covariate Shift Ratio, which defines a multiplicative value function.
+In particular, we study this approach in the case of the learning process of the Covariate Shift Ratio, which defines a multiplicative value function. In our theoretical analysis we are able to get stronger convergence guarantees than any previous work on the Covariate Shift, and we develop a practical framework using the Arcade Learning Environment (ALE) to evaluate it. As a result, we observed good trends in the learning of the ratio, obtaining similar performances than the previous state-of-the-art work in the area.
 
 
 
@@ -205,7 +205,7 @@ In particular, we will study this approach in the case of the learning process o
 \thispagestyle{plain}
 \section{Distributional Reinforcement Learning}
 
-
+TODO: Introducir seccion que presentaras y en que orden, y principalmente de que trabajos. Y todo el contenido si es SOTA mejor di: They... In [XX]. E impersonal: It is defined... mejor evita I, we...
 
 
 \subsection{Reinforcement Learning Setting}
@@ -214,10 +214,10 @@ Let's begin by characterizing our RL framework.
 
 We consider an agent interacting with an environment in the standard setting\cite{rlformulation}: at each step $t$, the agent selects an action $a_t$ based on its current state $s_t$, to which the environment responds with a reward $r_t$ and then moves to the next state $s_{t+1}$. We model this interaction as a time-homogeneous Markov Decision Process $(\Sspace, \A, r, P, \gamma)$, where
 \begin{itemize}
-    \item $\Sspace$ and $\A$ are the state and action spaces, respectively, we assume that both are finite, with $n:=|\Sspace|$;
+    \item $\Sspace$ and $\A$ are the state and action spaces, respectively. We assume that both are finite, with $n:=|\Sspace|$;
     \item $P$ is the transition kernel, $s_{t+1} \sim P(\cdot | s_t,a_t)$; the Markov assumption states that \\ $P(s_{t+1} | s_t, a_t, s_{t-1}, a_{t-1}, ...) = P(s_{t+1} | s_t, a_t)$;
     \item $r(s,a)$ represents the immediate reward given by the environment after taking action $a$ being in state $s$. These rewards are considered to be sampled from the reward function $R(s,a)$, i.e. $r_t \sim R(s_t,a_t)$;
-    \item $\gamma$ is the discount factor
+    \item $\gamma$ is the discount factor.
 \end{itemize}
 
 A policy $\pi$ maps each state to a probability distribution over the action space, $a_t \sim \pi(\cdot | s_t)$. In addition, we combine the policy $\pi$ and transition function $P$ into a state-to-state transition function $P_\pi \in \R^{n \times n}$ , whose entries are
@@ -277,7 +277,7 @@ As it was shown in \cite{rlformulation}, $\T^*$ is also a contraction mapping, a
 
 \subsection{Towards a Distributional Reinforcement Learning}
 
-Now that we have introduced the standard expected-based RL setting, we go a step further and present its distributional counterpart, which has become the focus of many RL research from the publication of \cite{DRL}.
+Now that we have introduced the standard expected-based RL setting, we go a step further and present its distributional counterpart, which has become the focus of many RL research since the publication of \cite{DRL}.
 
 The first key of that work is to redefine the RL framework from a distributional perspective; we are not dealing with expected values anymore, but with proper distributions. Bearing that in mind, they define the following distributional Bellman equation:
 \begin{equation} \label{distBE}
@@ -332,7 +332,7 @@ Finally, let's try to find out what actually the random return $Z$ represents by
     & \quad \quad f_{\sum_{i=0}^{t} \gamma^t R(s_{t},a_{t})} (z)
 \end{split}
 \end{equation}
-where we have repeatedly used property \ref{mixtureProperty2} of mixture distributions. In addition, note that assuming independence between the random reward $R$ of a certain state-action pair and the return distribution $Z^\pi$ of the possible next state-action (which is NOT TRUE in general), we can rewrite it in terms of convolutions as
+where we have repeatedly used property \ref{mixtureProperty2} of mixture distributions. In addition, note that assuming independence between the random reward $R$ of a certain state-action pair and the return distribution $Z^\pi$ of the possible next state-action (which is not true in general), we can rewrite it in terms of convolutions as
 \begin{equation}
 \begin{split}
     f_{Z^\pi(s,a)}(z) &= \sum_{s_{1}} P(s_{1} | s_{0},a_{0}) \sum_{a_{1}} \pi(a_{1}|s_{1})  \cdots \sum_{s_{t}} P(s_{t} | s_{t-1},a_{t-1}) \sum_{a_{t}} \pi(a_{t}|s_{t}) \\
@@ -359,9 +359,9 @@ We emphasize that three sources of randomness are involved in the compound distr
 which together make this distributional Bellman operator fundamentally different to the expected value-cased one (Equation \ref{BellmanOp}). Authors in \cite{DRL} demonstrate, under the assumption that these three random quantities are independent, that ${\T}^\pi$ is a contraction mapping whose unique fixed point is the value distribution $Z^\pi$.
 
 
-However, more difficulties arise in the \textit{control setting} when dealing with this distributional perspective; as stated in \cite{DRL}, while every optimal policy attain the same value $Q^*$ in the expected-valued case, there might be many optimal value distribiutions. Considering the set $\Pi^*$ of optimal policies, an optimal value distribution is defined as the value distribution of an optimal policy. Hence, the set of optimal value distributions is $\Z^* := \{ Z^{\pi^*} : \pi^* \in \Pi^* \}$.
+However, more difficulties arise in the \textit{control setting} when dealing with this distributional perspective; as stated in \cite{DRL}, while every optimal policy attain the same value $Q^*$ in the expected-valued case, there might be many optimal value distributions. Considering the set $\Pi^*$ of optimal policies, an optimal value distribution is defined as the value distribution of an optimal policy. Hence, the set of optimal value distributions is $\Z^* := \{ Z^{\pi^*} : \pi^* \in \Pi^* \}$.
 
-Note that an optimal value distribution must match the full distribution of returns under some optimal policy, so that not all value distributions with expectation $Q^*$ are optimal. A \textit{distributional Bellman optimality operator} $\T$ is defined as well, but it doesn't behave as well as the policy evaluation operators: it is not a contraction in any usual metric between distributions, and its convergence to the set of optimal value distributions is weak.
+Note that an optimal value distribution must match the full distribution of returns under some optimal policy, so that not all value distributions with expectation $Q^*$ are optimal. A \textit{distributional Bellman optimality operator} $\T$ is defined as well, but it does not behave as well as the policy evaluation operators: it is not a contraction in any usual metric between distributions, and its convergence to the set of optimal value distributions is weak.
 
 
 
@@ -382,7 +382,7 @@ In order to evaluate the distributional Bellman operator $\T^\pi$, all possible 
 Another problem usually arises after computing the stochastic operator $\widehat{\T}^\pi$ over a value distribution $Z(s,a)$: the new distribution may no longer lie in the selected parametric family $\mathcal{P}$. If this is the case, we further need to apply a \textit{projection operator} $\Pi : \mathscr{P}(\R) \rightarrow \mathcal{P}$ so as to map $\widehat{\T}^\pi Z(s,a)$ into the proper parametric family.
 
 \subsubsection*{Gradient Updates}
- Finally, having computed a stochastic approximation $\widehat{Z}_k (s_k,a_k) = \Pi \widehat{\T}^\pi Z_k(s_k,a_k)$ to the full target distribution, we still have to define how to compute the next iterate $Z_{k+1}$. For that, the use of gradient updates seems to be appropiate\cite{rlformulation}, as it helps dissipate some noise introduced in the target by the stochastic approximation. A key aspect here, however, is the not-straightforward correspondence between the considered loss and the previously selected projection; convergence and good behaviour of the resulting algorithm have only be proven when both of them rely on the same norm-induced geometry\cite{analysisC51,rlformulation}
+ Finally, having computed a stochastic approximation $\widehat{Z}_k (s_k,a_k) = \Pi \widehat{\T}^\pi Z_k(s_k,a_k)$ to the full target distribution, we still have to define how to compute the next iterate $Z_{k+1}$. For that, the use of gradient updates seems to be appropiate\cite{rlformulation}, as it helps dissipate some noise introduced in the target by the stochastic approximation. A key aspect here, however, is the not-straightforward correspondence between the considered loss and the previously selected projection; convergence and good behaviour of the resulting algorithm have only be proven when both of them rely on the same norm-induced geometry\cite{analysisC51,rlformulation}.
 
 \subsection{Categorical Distributional Reinforcement Learning}
 
@@ -485,7 +485,7 @@ Authors in \cite{analysisC51} also address the natural question of how the limit
 	Let $Z_C$ be the limiting return distribution of Proposition \ref{CramerBellmanContraction}. If for all state-action pairs their corresponding true return distribution $Z^\pi$ is supported on $[z_1,z_K]$, then 
 	$$\bar{\ell}_2(Z_C, Z^\pi) \leq \frac{1}{1-\gamma} \max_{1\leq i \leq K} (z_{i+1}-z_i). $$
 \end{prop}
-Note that the true return distribution is gradually recovered as the fineness of the support increases. Hence, this result can be viewed as a way of quantifying the cost of using the parametrization $\mathcal{P}$ instead of fully non-parametric probability distributions. Finally, we also highlight the assumption that the support of the true return distributions lie on the selected support, since we don't always have access to the scale of rewards in every RL problem; for these circumstances, an analogous result can be found in Proposition 4 of \cite{analysisC51}.
+Note that the true return distribution is gradually recovered as the fineness of the support increases. Hence, this result can be viewed as a way of quantifying the cost of using the parametrization $\mathcal{P}$ instead of fully non-parametric probability distributions. Finally, we also highlight the assumption that the support of the true return distributions lie on the selected support, since we do not always have access to the scale of rewards in every RL problem; for these circumstances, an analogous result can be found in Proposition 4 of \cite{analysisC51}.
 
 \begin{comment}
 \setlength{\algomargin}{1.5em}
@@ -517,7 +517,7 @@ Note that the true return distribution is gradually recovered as the fineness of
 
 In this second and last theoretical approach, we go a step beyond the tabular case by considering a framework where we make use of function approximators to compute the parametrized return distributions of each state-action pair, assuming a more realistic situation in which the state space is too large to store individual distributions.
 
-We will restrict our analysis to the context of linear function approximation, whose convergence is already proven in \cite{DRLlinear}. To the best of our knowledge, no Distributional RL algorithm with a non-linear function approximator has been proven to converge so far, despite the many efforts in studying C51.
+We will restrict our analysis to the context of linear function approximation, whose convergence is already proven\cite{DRLlinear}. To the best of our knowledge, no Distributional RL algorithm with a non-linear function approximator has been proven to converge so far, despite the many efforts in studying C51.
 
 Regarding the rest of approximations and assumptions of the CDRL algorithms considered in this study, they are exactly the same as in the previous Section \ref{CDRLtabular}: we contemplate the parametric family $\mathcal{P}$ with fixed support $\{z_1, \dots, z_K\}$, the Cramér-based projection $\Pi_C$, and reject any stochastic approximation.
 
@@ -556,7 +556,7 @@ We denote by $C\in \R^{K\times K}$ the lower-triangular matrix of ones, and by $
 \begin{equation} \label{generalizedCramer}
 	\ell_{\lambda}^2(Z_1,Z_2) = (Z_1 - Z_2)^\top \Pi_{e_K^\top} C C^\top \Pi_{e_K^\top} (Z_1 - Z_2) + \lambda ((Z_1 - Z_2)^\top e_K)^2 
 \end{equation}
-We will simplify the notation by denoting $C_\lambda = \Pi_{e_K^\top} C C^\top \Pi_{e_K^\top} + \lambda e_K e_K^\top $, so we can rewrite the distance definition as 
+The notation can be simplified by denoting $C_\lambda = \Pi_{e_K^\top} C C^\top \Pi_{e_K^\top} + \lambda e_K e_K^\top $, so we can rewrite the distance definition as 
 \begin{equation*}
 	\ell_{\lambda}^2(Z_1,Z_2) = (Z_1 - Z_2)^\top C_\lambda (Z_1 - Z_2) = \| Z_1 - Z_2 \|_{C_\lambda}
 \end{equation*}
@@ -573,9 +573,9 @@ where for each return distribution $Z$
 	 \Pi_{e^\perp} Z(x) = Z(x) - \int_{y=z_1}^{z_K} Z(y) dy.
 \end{equation*}
 \end{comment}
-Looking at Equation \ref{generalizedCramer}, the idea is that the first term on the right-hand side penalizes the difference in cumulative probabilities of both distributions, whereas the second term accounts for the difference in mass; we refer to \cite{DRLlinear} to get more details.
+Looking at Equation \ref{generalizedCramer}, the idea is that the first term on the right-hand side penalizes the difference in cumulative probabilities of both distributions, whereas the second term accounts for the difference in mass; we refer to \cite{DRLlinear} for further details.
 
-But, in addition to the Cramér distance generalization, authors in \cite{DRLlinear} also take into account the distribution $\xi$ according to which the states to be updated are sampled; %It can be whatever distribution, but in our case, given that we are following a policy $\pi$, we can consider it to be the stationary distribution $d_\pi$ (i.e. $d_\pi \in \Delta(\Sspace)$ such that $d_\pi = P_\pi d_\pi$; see a more detailed definition in Section \ref{COPTDsetting}).
+In addition to the Cramér distance generalization, authors in \cite{DRLlinear} also take into account the distribution $\xi$ according to which the states to be updated are sampled; %It can be whatever distribution, but in our case, given that we are following a policy $\pi$, we can consider it to be the stationary distribution $d_\pi$ (i.e. $d_\pi \in \Delta(\Sspace)$ such that $d_\pi = P_\pi d_\pi$; see a more detailed definition in Section \ref{COPTDsetting}).
 they use it to define a \textit{$\xi$-weighted Cramér distance} over value distributions as
 \begin{equation} \label{weightedCramer} 
 	\ell_{\xi,\lambda}^2 (Z_1,Z_2) := \sum_{s \in \Sspace} \xi(s) \ell_{\lambda}^{2}  (Z_1(s),Z_2(s)).
@@ -586,7 +586,7 @@ In particular, the previously commented projections of value distributions $\Pi_
 \begin{equation}
 	\Pi_{\lambda,\mathcal{P}} Z := {\arg \min}_{Z'\in \mathcal{P}} \ell_{\lambda}^2 (Z, Z');
 \end{equation} 
-it can be seen that the previously considered Cramér projection $\Pi_C$ satifies this minimization expression\cite{DRLlinear}. The latter, which in our notation will be expressed as $\Pi_{\xi,\lambda, \Phi}$, performs a $\xi$-weighted projection of any value distribution $Z$ onto the set of value distributions $\Phi$ by:
+it can be seen that the previously considered Cramér projection $\Pi_C$ satisfies this minimization expression\cite{DRLlinear}. The latter, which in our notation is expressed as $\Pi_{\xi,\lambda, \Phi}$, performs a $\xi$-weighted projection of any value distribution $Z$ onto the set of value distributions $\Phi$ by:
 \begin{equation}
 	\Pi_{\xi,\lambda, \Phi} Z := {\arg \min}_{\Phi\Theta, \Theta \in \R^{m \times K}} \ell_{\xi,\lambda}^2 (Z, \Phi\Theta)
 \end{equation} 
@@ -595,7 +595,7 @@ it can be seen that the previously considered Cramér projection $\Pi_C$ satifie
 	Let Z be an arbitrary value distribution supported on $\mathscr{P}([z_1,z_K])$. The $\xi$-weighted projection of $Z$ onto $\Phi$, $\Pi_{\xi,\lambda, \Phi} Z$, is equal to the $\xi$-weighted projection of $Z$ onto the parametric family $\mathcal{P}$, $\Pi_{\xi,\lambda, \mathcal{P}} Z$.
 \end{lemma}
 \end{comment}
-The following Lemma \ref{projectionNonexpansion} shows an intewresting result regarding the good behaviour of this projection $\Pi_{\xi,\lambda, \Phi}$
+The following Lemma \ref{projectionNonexpansion} shows an interesting result regarding the good behaviour of this projection $\Pi_{\xi,\lambda, \Phi}$
 \begin{lemma} \label{projectionNonexpansion}
 	$\Pi_{\xi,\lambda, \Phi}$ is a non-expansion in $\ell_{\xi,\lambda}^2$; for every pair of return distributions $Z, Z'$, we have
 	\begin{equation*}
@@ -695,14 +695,14 @@ As pointed out in \cite{DRLlinear}, the parameter $\lambda$ plays an important r
 \thispagestyle{plain}
 \section{Covariate Shift Ratio}
 
-
+TODO: intro + impersonal
 
 
 \subsection{Off-Policy Learning Setting} \label{offpolicySetting}
 
 As stated in \cite{DCOPTD}, here we move to the \textit{policy evaluation} problem within \textit{off-policy learning}, where we want to learn the value function $V^\pi$ of a \textit{target policy} $\pi$ from samples drawn from $P$ and a \textit{behaviour policy} $\mu$. 
 
-We first introduce some useful notation:
+We first introduce some notation:
 \begin{itemize}
     \item The Bellman equation for the state value function can be expressed in vector notation as $V^\pi = r_\pi + \gamma P_\pi V^\pi$, where $V^\pi \in \R^{n}$, $r_\pi \in \R^n$ and $P_\pi \in \R^{n \times n}$. The value function is in fact the fixed point of the \textit{Bellman operator} $\mathcal{T}_\pi: \R^{n \times n} \rightarrow \R^{n \times n}$, defined as $\mathcal{T}_\pi V := r_\pi + \gamma P_\pi V $. It defines a single step of \textit{bootstrapping}: the process $V^{k+1} := \mathcal{T}_\pi V^k$ converges to $V^\pi$.
     \item Let $d \in \R^n$; we write $D_d \in \R^{n\times n}$ for the corresponding diagonal matrix, and consider the weighted squared seminorm notation of vectors $x\in\R^n$ $||x||^2_{A} := ||A x||^2 = x^T A^T A x$, $||x||^2_d :=||x||^2_{D_d}= \sum_{i=1}^n d(i)^2 x(i)^2$.
@@ -869,7 +869,7 @@ So, basically, the discounted reset transition function encodes the transition d
 
 \subsubsection*{DCOP-TD with Linear Function Approximation}
 
-Now it is time to analyze how DCOP-TD algorithm behaves when it is combined with (linear) function approximation., and in particular whether it provides us with good convergence guarantees in a practical online application.
+Now it is time to analyze how DCOP-TD algorithm behaves when it is combined with (linear) function approximation, and in particular whether it provides us with good convergence guarantees in a practical online application.
 
 As in COP-TD, we consider a linear ratio estimate $\hat{c}(s) = \phi(s)^\top w$, and assume that sample transitions $(s,a,s')$ are drawn from $d_\mu$, $\mu(\cdot|s)$ and $P(\cdot|s,a)$, respectively. This induces the semi-gradient update
 \begin{equation} \label{updateLinearDCOPTD}
@@ -902,7 +902,7 @@ Theorem \ref{convergenceLinearCDRL} provides us with the reason why this concent
 \end{theorem}
 
 \begin{remark}
-	We note that the actual Theorem 4 of paper \cite{DCOPTD}, from which previous Theorem \ref{convergenceLinearDCOP} is extracted, provides a slightly more general result for $n$-step updates; we refer to \cite{TD} to get more details about these methods. For simplicity, we have reduced it to the case of 1-step updates, as we have been considering in the rest of our analysis.
+	We note that the actual Theorem 4 of paper \cite{DCOPTD}, from which previous Theorem \ref{convergenceLinearDCOP} is extracted, provides a slightly more general result for $n$-step updates; we refer to \cite{TD} for further details about these methods. For simplicity, we have reduced it to the case of 1-step updates, as we have been considering in the rest of our analysis.
 \end{remark}
 
 So, provided we take a sufficiently small $\hat{\gamma}$, Theorem \ref{convergenceLinearDCOP} guarantees that DCOP-TD overcomes the divergence issues of COP-TD by granting that $\Pi_{d_\mu} \hat{Y}_{\hat{\gamma}}$ is a contraction mapping. In addition, the empirical evaluation performed on \cite{DCOPTD} of this discounted version suggests that it is unlikely to be in the worst-case scenario achieving $K_{\pi,\mu,1}$ strictly, as the algorithm avoid divergence even with large $\hat{\gamma}$ values.
@@ -1030,7 +1030,7 @@ In the previous Lemma \ref{expectationDistCOPoperator} we show that the expectat
 
 \subsection{Distributional DCOP-TD}
 
-We will directly develop the basis of a Distributional $\hat{\gamma}$-Discounted COP-TD, which has provided us with better convergence guarantees in the expected-valued case; in addition, we recall that it's more general in the sense that we can recover the undiscounted setting by simply considering $\hat{\gamma}=1$.
+We will directly develop the basis of a Distributional $\hat{\gamma}$-Discounted COP-TD, which has provided us with better convergence guarantees in the expected-valued case; in addition, we recall that it is more general in the sense that we can recover the undiscounted setting by simply considering $\hat{\gamma}=1$.
 
 \begin{definition} \label{defDistCOPoperator}
 	We define the \textit{distributional DCOP operator} $Y^D_{\hat{\gamma}}: \mathscr{P}(\R) \rightarrow \mathscr{P}(\R)$ as 
@@ -1089,12 +1089,12 @@ In the previous Lemma \ref{expectationDistDCOPoperator} we show that the expecta
 	\end{proof}
 \end{corol}
 
-However, don't have any convergence guarantee for the iterates $\{X_k\}$ to some ratio distribution $X^C$, as we would like to. That is precisely what motivated us to develop the following logarithmic approach, which provides us with the desired distributional convergence.
+However, do not have any convergence guarantee for the iterates $\{X_k\}$ to some ratio distribution $X^C$, as we would like to. That is precisely what motivated us to develop the following logarithmic approach, which provides us with the desired distributional convergence.
 
 
 \subsection{Log-Distributional Covariate Shift Approach}
 
-Note that the Distributional Covariate Shift Equation \ref{distCSR} is purely multiplicative, and so it is the associated update rule in the learning setting. This complicates our analysis, and we suspect it is the main reason why we couldn't find any convergence guarantee for the distributional DCOP-TD algorithm.
+Note that the Distributional Covariate Shift Equation \ref{distCSR} is purely multiplicative, and so it is the associated update rule in the learning setting. This complicates the analysis, possibly being one of the reasons why we could not find any convergence guarantee for the distributional DCOP-TD algorithm.
 
 There was, though, one way of transforming that multiplicative behaviour into a better-suited aditive one: working in the logarithmic space. To do so, we first define the corresponding log-ratio distributions:
 
@@ -1125,7 +1125,7 @@ Having these new distribution objects lying in the logarithmic space, our propos
 	\end{equation*}
 \end{definition}
 
-At this point, one might wonder why this logarithmic approach wasn't considered in the original value-based (D)COP-TD development; the reason is that, in general, Jensen's inequality prevents the correspondence between the multiplicative fixed point and the exponential of the log fixed point:
+At this point, one might wonder why this logarithmic approach was not considered in the original value-based (D)COP-TD development; the reason is that, in general, Jensen's inequality prevents the correspondence between the multiplicative fixed point and the exponential of the log fixed point:
 \begin{equation*}
 	\E [c(s)] \neq \exp (\E[\log c(s)]) \ \textnormal{ since } \ \E[\log c(s)] \leq \log( \E [c(s)] )
 \end{equation*}
@@ -1152,7 +1152,7 @@ In contrast to that, Proposition \ref{circumventJensen} shows that we can circum
 	\end{proof}
 \end{prop}
 
-Note that the previous result ensures that learning the additive fixed distribution $W^C$ in log space and exponentiating it would lead to a proper ratio distribution $X^C$. However, we emphasize that, so far, we don't have any guarantee that these distributional fixed point exists, neither in log space nor in the original multiplicative one. 
+Note that the previous result ensures that learning the additive fixed distribution $W^C$ in log space and exponentiating it would lead to a proper ratio distribution $X^C$. However, we emphasize that, so far, we do not have any guarantee that these distributional fixed point exists, neither in log space nor in the original multiplicative one. 
 
 What we do know, though, is that the expectation of the ratio distributions that result from the repeated application of the distributional (D)COP operator converge (Corollary \ref{convergenceExpectationDistDCOP}); the following Corollary of Proposition \ref{circumventJensen} allows us to extend this result to the exponentiated log-ratio distributions, so that, again, we can estimate the Covariate Shift Ratio values in the Log-Distributional COP-TD setting as simply
 \begin{equation*}
@@ -1173,7 +1173,7 @@ What we do know, though, is that the expectation of the ratio distributions that
 
 Our goal, nonetheless, is to get a more robust convergence result beyond expectations: we would like to prove the existence -and uniqueness- of some fixed point $W^C$. In practice, as we have shown in previous Sections, the discounted version is potentially more suitable to attain that objective, but now that we work in a logarithmic space we face the problem of how exactly apply the $\hat{\gamma}$-discounting in order to get a practical and reasonable algorithm. 
 
-We finally decided to implement the discounting so that the resulting operator belongs to the class of Bellman operators already detailed and analyzed in the RL literature. As we shall see, this will greatly simplify our study, and will provide us with strong convergence results.
+We finally implemented the discounting so that the resulting operator belongs to the class of Bellman operators already detailed and analyzed in the RL literature. As we will see, this will greatly simplify our study, and will provide us with strong convergence results.
 
 
 \begin{definition} 
@@ -1278,7 +1278,7 @@ This difference can be interpreted as the cost of using the parametrization $\ma
 
 \subsubsection{Linear Function Approximation}
 
-In our second and last framework, we consider the use of linear function approximation to estima te the parametrized log-ratio distribution of each state. We also make use of the Categorical setting described above, and avoid any stochasticity in the following analysis.
+In our second and last framework, we consider the use of linear function approximation to estimate the parametrized log-ratio distribution of each state. We also make use of the Categorical setting described above, and avoid any stochasticity in the following analysis.
 
 We will introduce the same notation that was presented in Section \ref{CDRLlinear} for CDRL with Linear Function Approximation. Thus, the linear model redefines the approximated log-ratio distributions $W$ as mappings from states $s\in \Sspace$ to vectors defined by a linear combination of features:
 \begin{equation}
@@ -1356,7 +1356,7 @@ expectation:
 \thispagestyle{plain}
 \section{Implementation}
 
-In the previous sections, the theoretical framework has been presented and analyzed in detail. Our goal now is to describe how we have implemented that framework in practice
+In the previous sections, the theoretical framework has been presented and analyzed in detail. Our goal now is to describe how we have implemented that framework in practice.
 
 First of all, we highlight the use of Dopamine\cite{dopamine}, a research framework for fast prototyping of reinforcement learning algorithms, to implement our Distributional Covariate Shift approach; all the development can be found at our \href{https://github.com/gbg141/dopamine}{Github repository}. Basically, our baseline is the \texttt{RainbowAgent}\cite{Rainbow} already implemented in Dopamine with the C51 configuration file. The resulting \texttt{CovariateShiftAgent} is contained in two files:
 \begin{itemize}
@@ -1373,7 +1373,7 @@ In the following subsections, we will analyze the key points of our practical fr
 
 \subsection{Non-linear Function Approximation}
 
-In our attempt to achieve the best experimental performance, we go beyond the defined theoretical framework by implementing a non-linear function approximation for getting ratio -or log-ratio- distribution estimates. This is a choice that prevent us from having any convergence guarantee, but it is supported by the outstanding experimental behaviour of C51\cite{DRL}, which makes use of a non-linear neural network. In fact, in our implementation we augment the original C51 network by adding an extra head, the distributional ratio model, to the final convolutional layer, whose role is to predict the corresponding (log-)ratio distribution. 
+In our attempt to achieve the best experimental performance, we go beyond the defined theoretical framework by implementing a non-linear function approximation for getting ratio -or log-ratio- distribution estimates. This is a choice that prevents us from having any convergence guarantee, but it is supported by the outstanding experimental behaviour of C51\cite{DRL}, which makes use of a non-linear neural network. In fact, in our implementation we augment the original C51 network by adding an extra head, the distributional ratio model, to the final convolutional layer, whose role is to predict the corresponding (log-)ratio distribution. 
 
 \begin{figure}[h]
     \centering
@@ -1475,7 +1475,7 @@ We note, however, that our implementation of the function \texttt{project\_distr
 
 
 \subsubsection*{Gradient Updates}
--A decision had to be taken about how to compute the next iterate of our stochastic approximation. Attending to what we have shown in our theoretical framework, defining a gradient update based on a Cramér loss seem to be the most appropriate solution given that we have implemented the Cramér projection $\Pi_C$. However, we finally decided to imitate the original C51 agent and perform a single step of gradient descent on the Kullback-Leibler divergence of the predicted distribution from the target one with respect to the parameters of the prediction.
+Attending to what we have shown in our theoretical framework, defining a gradient update based on a Cramér loss seem to be the most appropriate solution given that we have implemented the Cramér projection $\Pi_C$. However, we finally decided to imitate the original C51 agent and perform a single step of gradient descent on the Kullback-Leibler divergence of the predicted distribution from the target one with respect to the parameters of the prediction.
 
 The reasons behind our decision are purely practical; despite there is no convergence guarantee of C51 due to this KL divergence step, so far its experimental results\cite{DRL} are much better than those that strictly rely on the theoretical framework\cite{DRLlinear}. Hence, as we now seek for the best performance possible of our Distributional Covariate Shift approach, we kind of ignore that part of the theory and implement the KL gradient update for generating the new estimates of our \texttt{CovariateShiftAgent}.
  
@@ -1485,7 +1485,7 @@ The reasons behind our decision are purely practical; despite there is no conver
 
 \subsection{Categorical Distributional DCOP-TD}
 
-With all the main ingredients of our implementation already detailed in previous sections, we simply want to summarize the steps that conform our distributional DCOP-TD algorithms. To begin with, we show in Algorithm \ref{alg:CatDistDCOP-TD} the Categorical Distributional $\hat{\gamma}$-Discounted COP-TD main process, where 
+With all the main ingredients of our implementation detailed in previous sections, next we summarize the steps that conform our distributional DCOP-TD algorithms. To begin with, we show in Algorithm \ref{alg:CatDistDCOP-TD} the Categorical Distributional $\hat{\gamma}$-Discounted COP-TD main process, where 
 \begin{itemize}
 	\item $\{x_K\}$ is the set of atoms that define our categorical parametric family $\mathcal{P}$
 	\item we denote by $\theta$ and $\bar{\theta}$ the weights of the online and target networks, respectively;
@@ -1531,7 +1531,7 @@ With all the main ingredients of our implementation already detailed in previous
 
 \subsection{Categorical Log-Distributional DCOP-TD}
 
-Finally, we present in Algorithm \ref{alg:CatLogDistDCOP-TD} the sketch of our Categorical Log-Distributional DCOP-TD algorithm. The observations made in previous Section apply here, where now $\{w_K\}$ is the support and $G_{\hat{\gamma}} W(s) =$ $(f_{\log(\rho),\hat{\gamma}})_{\#} W(s)$. In fact, as one can easily see, the steps are equivalent to those of the multiplicative case.
+Finally, we present in Algorithm \ref{alg:CatLogDistDCOP-TD} the sketch of our Categorical Log-Distributional DCOP-TD algorithm. The observations made in previous Section apply here, where now $\{w_K\}$ is the support and $G_{\hat{\gamma}} W(s) =$ $(f_{\log(\rho),\hat{\gamma}})_{\#} W(s)$. In fact, as one can see, the steps are equivalent to those of the multiplicative case.
 
 
 

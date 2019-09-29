@@ -3,11 +3,11 @@
 # Script to prepare the docker container to be run
 
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=5
+export CUDA_VISIBLE_DEVICES=8
 
-base=./logs/Seaquest/multiplicative/centeredRange/x2/expBins/
+base=./logs/Asterix/logapproach/centeredRange/x2/discount97epsilon5weight002/
 host=0.0.0.0
-port=6006
+port=7007
 gin_files='dopamine/agents/covariate_shift/configs/covariate_shift.gin'
 
 if [ ! -z $1 ]
