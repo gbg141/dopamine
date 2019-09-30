@@ -32,9 +32,9 @@ CovariateShiftAgent.symmetric_range = True
 CovariateShiftAgent.symmetric_exponent = 2
 CovariateShiftAgent.ratio_cmin = 0.01
 CovariateShiftAgent.ratio_cmax = 100
-CovariateShiftAgent.log_ratio_approach = True
+CovariateShiftAgent.log_ratio_approach = False
 CovariateShiftAgent.use_ratio_exp_bins = False
-CovariateShiftAgent.plot_log_scale = True
+CovariateShiftAgent.plot_log_scale = False
 CovariateShiftAgent.define_base_and_exp = False
 CovariateShiftAgent.ratio_exp_base = 2.
 CovariateShiftAgent.ratio_min_exp = None
@@ -45,7 +45,7 @@ CovariateShiftAgent.ratio_loss_weight = 0.002
 tf.train.AdamOptimizer.learning_rate = 0.00025
 tf.train.AdamOptimizer.epsilon = 0.0003125
 
-atari_lib.create_atari_environment.game_name = 'Asterix'
+atari_lib.create_atari_environment.game_name = 'Seaquest'
 # Sticky actions with probability 0.25, as suggested by (Machado et al., 2017).
 atari_lib.create_atari_environment.sticky_actions = True
 create_agent.agent_name = 'covariate_shift'
